@@ -1,5 +1,5 @@
 #==============================================================================
-# RPG Maker VX Ace Neuro Integration
+# RPG Maker VX Ace Neuro SDK
 #------------------------------------------------------------------------------
 # Neuro integration / SDK for RPG Maker.
 # See https://github.com/Pasu4/rpg-maker-neuro-sdk for more information.
@@ -59,7 +59,6 @@ module NeuroSDK
   # TODO: Figure out cancellation (needs to discard previous message, not sure
   # how to do that yet).
   def self.recv(max_wait_frames = 18000)
-    puts "recv called"
     result = ""
     waited_frames = 0
     # canceled = false
