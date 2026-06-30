@@ -290,7 +290,7 @@ class Socket
   def self.gethostbyname(name)
     raise SocketError::ENOASSOCHOST if (ptr = Winsock.gethostbyname(name)) == 0
     host = ptr.copymem(16).unpack('iissi')
-    [host[0].copymem(64).split("\0")[0], [], host[2], host[4].copymem(4).unpack('l')[0].copymem(4)]
+    [host[0].copymem(64), [], host[2], host[4].copymem(4).unpack('l')[0].copymem(4)]
   end
   #----------------------------------------------------------------------------
   # ● Returns the user's hostname.
@@ -481,7 +481,18 @@ class SocketError < StandardError
 
   def self.check
     errno = Winsock.WSAGetLastError
-    raise Errno.const_get(Errno.constants.detect { |c| Errno.const_get(c).new.errno == errno })
+
+    if errno == 0
+      return
+    end
+
+    constName = Errno.constants.detect {|c| Errno.const_get(c).new.errno == errno }
+
+    if constName
+      raise Errno.const_get(constName)
+    else
+      raise "Unknown network error code: #{errno}"
+    end
   end
 
 end
