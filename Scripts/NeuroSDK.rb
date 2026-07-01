@@ -91,7 +91,9 @@ module NeuroSDK
     # The main fiber
     @fiber = Fiber.new { main }
 
-    attr_reader :connected
+    def connected?
+      @connected
+    end
 
     #------------------------------------------------------------------------
     #   Private functions
@@ -209,7 +211,7 @@ class Window_Message
 
   def process_all_text
     # Send text to Neuro when it is printed on screen
-    NeuroSDK.send_context($game_message.all_text) if NeuroSDK.connected
+    NeuroSDK.send_context($game_message.all_text) if NeuroSDK.connected?
     _neurosdk_process_all_text
   end
 end
