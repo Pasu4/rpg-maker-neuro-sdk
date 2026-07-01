@@ -101,26 +101,20 @@ module NeuroSDK
 
     def main()
       result = ""
-      # waited_frames = 0
       while true
         Fiber.yield while @socket.nil?
 
         available = @socket.select(0)  # Check if buffer has data
-        # puts "available: #{available}"
 
         if available > 0
           buffer = @socket.recv(1024)      # Read up to 1024 bytes
           buffer.gsub!(0.chr, "")           # Remove null characters
           result += buffer
-          # puts "buffer: #{buffer}, result: #{result}"
-          # puts "buffer.count(\"\\n\"): #{buffer.count("\n")}"
           if result.count("\n") > 0   # End after a newline is encountered
             @command, result = result.split("\n", 2)
             handle_command
           end
         else
-          # puts "Waiting 1 frame (#{waited_frames})"
-          # waited_frames += 1
           Fiber.yield
         end
       end
