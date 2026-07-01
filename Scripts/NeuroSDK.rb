@@ -5,6 +5,7 @@
 # See https://github.com/Pasu4/rpg-maker-neuro-sdk for more information.
 #
 # Author: Pasu4
+# Version: 0.1.0
 #
 # Based on:
 # https://lthzelda.wordpress.com/2010/04/28/rm-4-tcp-sockets-in-rpg-maker-vx/
