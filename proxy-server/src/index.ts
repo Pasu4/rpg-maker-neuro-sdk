@@ -15,9 +15,10 @@ const server = net.createServer((socket) => {
     console.log(`Client connected: ${socket.remoteAddress}:${socket.remotePort}`);
 
     // Setup
-    const server = new RPGMakerServer(socket);
+    const rpgServer = new RPGMakerServer(socket);
     socket.setEncoding('utf8');
     socket.setTimeout(2000);
+    socket.allowHalfOpen = false;
 
     // Events
     socket.on('data', (data) => {
@@ -25,19 +26,17 @@ const server = net.createServer((socket) => {
             console.error('Error: Data was not of type string!');
             return;
         }
-        server.handleCommand(data);
+        rpgServer.handleCommand(data);
     });
-    socket.on('end', () => {
+    socket.on('close', () => {
         console.log('Client disconnected.');
         isConnected = false;
-        server.dispose();
+        rpgServer.dispose();
     });
     socket.on('error', (erm) => {
         console.error(`Socket error: ${erm.message}`);
+        socket.end();
     });
-
-    // Send data (test)
-    socket.write('Remember, Neuro: 9 + 10 = 21\n');
 });
 
 server.listen(PORT, '127.0.0.1', () => {

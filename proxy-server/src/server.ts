@@ -51,6 +51,7 @@ export class RPGMakerServer {
     //#region Client -> Server
 
     handleContext(context: string) {
+        context = Buffer.from(context, 'base64').toString('utf-8');
         this._neuroClient.sendContext(context);
     }
 

@@ -26,81 +26,163 @@ PORT = 7689
 #                           END OF CONFIGURATION                              #
 ###############################################################################
 
-def tcptest
-  #Create a socket
-  s = TCPSocket.new(HOST, PORT)
+#----------------------------------------------------------------------------
+#   Utility
+#----------------------------------------------------------------------------
 
-  #Send a test message
-  s.send("Testing...\n")
-  #Receive a result from the server
-  msg = ""
-  while
-    buffer = s.recv(1024)    #Read UP TO 1024 bytes
-    buffer.gsub!(0.chr, "") #Remove null bytes
-    msg += buffer            #Append received data
-    break if buffer.count("\n")>0   #Stop if we've reached the newline
+module NeuroSDKUtils
+  class << self
+    $encode64_table = [
+      "A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P",
+      "Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f",
+      "g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v",
+      "w","x","y","z","0","1","2","3","4","5","6","7","8","9","+","/",
+    ]
+    $decode64_table = Hash[$encode64_table.zip(0...$encode64_table.size)]
+
+    def encode64(string)
+      result = []
+      chunks = string.bytes.each_slice(3)
+      for chunk in chunks
+        result.push   chunk[0] >> 2
+        result.push  (chunk[0] << 4) & 63
+        result[-1] |= chunk[1] >> 4       if chunk.size >= 2
+        result.push  (chunk[1] << 2) & 63 if chunk.size >= 2
+        result[-1] |= chunk[2] >> 6       if chunk.size >= 3
+        result.push   chunk[2]       & 63 if chunk.size >= 3
+      end
+      result.map { |n| $encode64_table[n] } .join
+    end
+
+    def decode64(string)
+      result = []
+      chunks = string.chars.map { |c| $decode64_table[c] } .each_slice(4)
+      for chunk in chunks
+        result.push  (chunk[0] << 2) & 255
+        result[-1] |= chunk[1] >> 4        if chunk.size >= 2
+        result.push  (chunk[1] << 4) & 255 if chunk.size >= 2
+        result[-1] |= chunk[2] >> 2        if chunk.size >= 3
+        result.push  (chunk[2] << 6) & 255 if chunk.size >= 3
+        result[-1] |= chunk[3]             if chunk.size >= 4
+      end
+      result.map(&:chr).join
+    end
   end
-  #Done; close the socket, print our message
-  s.close()
-  print "Received: #{msg}"
 end
 
 # Contains methods for communicating with the Neuro API.
 module NeuroSDK
   class << self
+    #--------------------------------------------------------------------------
+    #   Class variables
+    #--------------------------------------------------------------------------
+
+    # Whether the SDK is connected to the proxy server.
     @connected = false
-    def connected
-      @connected
-    end
-    # @socket = nil
-    # Receive a command from the socket.
-    # - **maxWaitFrames:**
-    #   Maximum time to wait in frames.
-    #   Default is 18000 (5 minutes).
-    # TODO: Figure out cancellation (needs to discard previous message, not sure
-    # how to do that yet).
-    def recv(max_wait_frames = 18000)
+
+    # The message queue from the socket.
+    # It will only be valid for a single frame after joining.
+    @command = nil
+
+    # The TCP socket.
+    @socket = nil
+
+    # The main fiber
+    @fiber = Fiber.new { main }
+
+    attr_reader :connected
+
+    #------------------------------------------------------------------------
+    #   Private functions
+    #------------------------------------------------------------------------
+
+    private
+
+    def main()
       result = ""
-      waited_frames = 0
-      # canceled = false
-      while waited_frames < max_wait_frames
-        available = $socket.select(0)  # Check if buffer has data
-        puts "available: #{available}"
-        # canceled = cancel_on.call
-        # break if canceled
-        if true
-        # if buffer.bytesize > 0
-          buffer = $socket.recv(1024)      # Read up to 1024 bytes
+      # waited_frames = 0
+      while true
+        Fiber.yield while @socket.nil?
+
+        available = @socket.select(0)  # Check if buffer has data
+        # puts "available: #{available}"
+
+        if available > 0
+          buffer = @socket.recv(1024)      # Read up to 1024 bytes
           buffer.gsub!(0.chr, "")           # Remove null characters
           result += buffer
-          puts "buffer: #{buffer}, result: #{result}"
-          puts "buffer.count(\"\\n\"): #{buffer.count("\n")}"
-          break if buffer.count("\n") > 0   # End after a newline is encountered
-          # TODO: Multiple messages in the buffer might cause problems
+          # puts "buffer: #{buffer}, result: #{result}"
+          # puts "buffer.count(\"\\n\"): #{buffer.count("\n")}"
+          if result.count("\n") > 0   # End after a newline is encountered
+            @command, result = result.split("\n", 2)
+            handle_command
+          end
         else
-          puts "Waiting 1 frame (#{waited_frames})"
-          waited_frames += 1
+          # puts "Waiting 1 frame (#{waited_frames})"
+          # waited_frames += 1
           Fiber.yield
         end
       end
-      puts "End of loop"
 
       if waited_frames >= max_wait_frames
         result = ""
-        $stderr.puts "Error: Server took too long to respond (expected a response within #{max_wait_frames/60}s)."
       end
-      # result = "" if canceled
+    end
 
-      result.chomp # Remove newline
+    def handle_command
+      id, data = @command.split(":", 2)
+      puts "Got command #{@command}"
+
+      case id
+      when "ok"
+        # Give joined fibers time to react to the response
+        Fiber.yield
+      else
+        $stderr.puts "Error: Got unknown command '#{@command}'"
+      end
+      @command = nil
+    end
+
+    # Wait for a command from Neuro.
+    # - **timeout:**
+    #   Timeout in frames. Default is 3600 (1 minute).
+    def join(timeout = 3600)
+      frames = 0
+      while frames < timeout
+        if @command != nil
+          command = @command  # Cache so it doesn't get deleted
+          @command = nil
+          return command
+        end
+        frames += 1
+        Fiber.yield
+      end
+      $stderr.puts "Error: Server took too long to respond (expected a response within #{timeout/60}s)."
+      nil
+    end
+
+    #------------------------------------------------------------------------
+    #   Public functions
+    #------------------------------------------------------------------------
+
+    public
+
+    # Frame update (internal use).
+    def update
+      @fiber = Fiber.new { main } unless @fiber
+      @fiber.resume
     end
 
     # Connect to the Neuro API proxy server.
     def connect
+      if @connected
+        $stderr.puts "Warning: Attempted to connect while already connected."
+        return
+      end
       # Create the socket
-      $socket = TCPSocket.new HOST, PORT
-      puts "Created socket."
+      @socket = TCPSocket.new HOST, PORT
       # Wait for the server to send the OK signal
-      @connected = self.recv == "ok"
+      @connected = join(60) == "ok"
       if !@connected
         $stderr.puts "Error: Did not receive OK from server."
       end
@@ -109,7 +191,7 @@ module NeuroSDK
 
     # Sends a context message to Neuro.
     def send_context(context)
-      # self.recv
+      @socket.send("context:#{NeuroSDKUtils.encode64(context)}")
     end
   end
 end
@@ -118,13 +200,21 @@ end
 #   Hooks
 #----------------------------------------------------------------------------
 
+class Scene_Base
+  alias_method :_neurosdk_update, :update
+
+  def update
+    _neurosdk_update
+    NeuroSDK.update
+  end
+end
+
 class Window_Message
   alias_method :_neurosdk_process_all_text, :process_all_text
 
   def process_all_text
     # Send text to Neuro when it is printed on screen
-    # DEBUG: Just send the text to the console for now
-    puts $game_message.all_text
+    NeuroSDK.send_context($game_message.all_text) if NeuroSDK.connected
     _neurosdk_process_all_text
   end
 end
