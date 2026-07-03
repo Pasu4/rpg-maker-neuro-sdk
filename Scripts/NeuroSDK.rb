@@ -71,6 +71,268 @@ module NeuroSDKUtils
   end
 end
 
+class SchemaBuilder
+  class << self
+    # Shorthand for `SchemaBuilder.new.types([:string])`.
+    def string
+      SchemaBuilder.new.types([:string])
+    end
+
+    # Shorthand for `SchemaBuilder.new.types([:boolean])`.
+    def boolean
+      SchemaBuilder.new.types([:boolean])
+    end
+
+    # Shorthand for `SchemaBuilder.new.types([:integer])`.
+    def integer
+      SchemaBuilder.new.types([:integer])
+    end
+
+    # Shorthand for `SchemaBuilder.new.types([:number])`.
+    def number
+      SchemaBuilder.new.types([:number])
+    end
+
+    # Shorthand for `SchemaBuilder.new.types([:null])`.
+    def null
+      SchemaBuilder.new.types([:null])
+    end
+
+    # Shorthand for `SchemaBuilder.new.types([:array]).items(items)`.
+    # @param items [SchemaBuilder] Schema for the items of the array.
+    def array(items)
+      SchemaBuilder.new
+        .types([:array])
+        .items(items)
+    end
+
+    # Shorthand for `SchemaBuilder.new.types([:object]).properties(properties)`.
+    # @param properties [Hash<String, SchemaBuilder>] A hash mapping property
+    #   names to sub-schemas.
+    def object(properties)
+      SchemaBuilder.new
+        .types([:object])
+        .properties(properties)
+    end
+
+    # Shorthand for `SchemaBuilder.new.enum(enum)`.
+    # @param enum [Array] Array of accepted values.
+    def enum(enum)
+      SchemaBuilder.new
+        .enum(enum)
+    end
+
+    # Escape a string so it can be pasted into a JSON string.
+    # @param string [String] The string to escape.
+    # @return [String] The escaped string.
+    def escape(string)
+      string
+        .gsub(/["\\]/, "\\\\\\&")
+        .gsub(/[\b]/, "\\\\b")
+        .gsub(/\f/, "\\\\f")
+        .gsub(/\n/, "\\\\n")
+        .gsub(/\r/, "\\\\r")
+        .gsub(/\t/, "\\\\t")
+        # leaving out \u#### because no
+    end
+
+    # @param value [String, Integer, Float, Boolean, nil] The value to convert
+    #   to a JSON value. Does not support arrays and objects.
+    # @return [String] The JSON value.
+    def json_value(value)
+      if value.is_a? String
+        return '"' + escape(value) + '"'
+      elsif value.is_a?(Integer) || value.is_a?(Float) || value.is_a?(TrueClass) || value.is_a?(FalseClass)
+        return value.to_s
+      elsif value.nil?
+        return 'null'
+      end
+
+      $stderr.puts "Error: Class #{value.class} is not supported."
+    end
+  end
+
+  def optional?; @optional end
+
+  def initialize
+    @optional = false
+    @types = []
+  end
+
+  # Set the accepted types for the schema.
+  # @param types [Array<:string, :boolean, :integer, :number, :array, :object>]
+  #   The accepted types for the schema.
+  # @return [SchemaBuilder] Itself for chaining.
+  def types(types)
+    @types = types
+    self
+  end
+
+  # @param types [Array<:string, :boolean, :integer, :number>]
+  # @return [SchemaBuilder] Itself for chaining.
+  def items(items)
+    @items = items
+    self
+  end
+
+  # @param properties [Hash<String, SchemaBuilder>] A hash mapping property
+  #   names to sub-schemas.
+  # @return [SchemaBuilder] Itself for chaining.
+  def properties(properties)
+    @properties = properties
+    self
+  end
+
+  # @param enum [Array] Array of accepted values. Only supports primitives.
+  # @return [SchemaBuilder] Itself for chaining.
+  def enum(enum)
+    @enum = enum
+    self
+  end
+
+  # Set the schema as optional. This means that the property may be omitted
+  #   from the object.
+  # @return [SchemaBuilder] Itself for chaining.
+  def optional
+    @optional = true
+    self
+  end
+
+  # Set a minimum value for the integer or number.
+  # @param min [Integer, Float] The minimum value.
+  # @param exclusive [Boolean] Whether the minimum value itself should be
+  #   excluded from the range.
+  # @return [SchemaBuilder] Itself for chaining.
+  def min(min, exclusive = false)
+    @min = min
+    @minExclusive = exclusive
+    self
+  end
+
+  # Set a maximum value for the integer or number.
+  # @param max [Integer, Float] The maximum value.
+  # @param exclusive [Boolean] Whether the maximum value itself should be
+  #   excluded from the range.
+  # @return [SchemaBuilder] Itself for chaining.
+  def max(max, exclusive = false)
+    @max = max
+    @maxExclusive = exclusive
+    self
+  end
+
+  # Set a minimum number of items for the array.
+  # @param min [Integer] The minimum number of items.
+  # @return [SchemaBuilder] Itself for chaining.
+  def minItems(min)
+    @minItems = min
+    self
+  end
+
+  # Set a maximum number of items for the array.
+  # @param max [Integer] The maximum number of items.
+  # @return [SchemaBuilder] Itself for chaining.
+  def maxItems(max)
+    @maxItems = max
+    self
+  end
+
+  # @param description [String] The description of the schema.
+  # @return [SchemaBuilder] Itself for chaining.
+  def description(description)
+    @description = description
+    self
+  end
+
+  # Build the JSON schema.
+  # @return [String] The string representing the schema.
+  def build
+    result = "{"
+    comma = false
+
+    # type
+    if @types.size == 1
+      comma = true
+      result << '"type":"' << @types[0].to_s << '"'
+    elsif @types.size > 1
+      comma = true
+      result << '"type":["' << @types.map(&:to_s).join('","') << '"]'
+    end
+
+    # description
+    unless @description.nil?
+      result << ',' if comma
+      comma = true
+      result << '"description":"' << SchemaBuilder.escape(@description) << '"'
+    end
+
+    # minimum
+    unless @min.nil?
+      result << ',' if comma
+      comma = true
+      result << (@minExclusive ? '"exclusiveMinimum":' : '"minimum":') << @min.to_s
+    end
+
+    # maximum
+    unless @max.nil?
+      result << ',' if comma
+      comma = true
+      result << (@maxExclusive ? '"exclusiveMaximum":' : '"maximum":') << @max.to_s
+    end
+
+    # enum
+    unless @enum.nil?
+      result << ',' if comma
+      comma = true
+      result << '"enum":[' << @enum.map {|item| SchemaBuilder.json_value(item)} .join(',') << ']'
+    end
+
+    # properties
+    unless @properties.nil?
+      result << ',' if comma
+      comma = true
+      propcomma = false
+      result << '"properties":{'
+      @properties.each do |key, value|
+        result << ',' if propcomma
+        propcomma = true
+        result << '"' << key << '":' << value.build  # Recursively build properties
+      end
+      result << "}"
+    end
+
+    # required
+    required_properties = @properties.nil? ? [] : @properties.filter_map {|key, value| key unless value.optional?}
+    if required_properties.size > 0
+      result << ',' if comma
+      comma = true
+      result << '"required":["' << required_properties.join('","') << '"]'
+    end
+
+    # items
+    unless @items.nil?
+      result << ',' if comma
+      comma = true
+      result << '"items":' << @items.build
+    end
+
+    # minItems
+    unless @minItems.nil?
+      result << ',' if comma
+      comma = true
+      result << '"minItems":' << @minItems.to_s
+    end
+
+    # maxItems
+    unless @maxItems.nil?
+      result << ',' if comma
+      comma = true
+      result << '"maxItems":' << @maxItems.to_s
+    end
+
+    result << "}"
+  end
+end
+
 # Contains methods for communicating with the Neuro API.
 module NeuroSDK
   class << self
