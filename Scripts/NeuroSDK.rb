@@ -246,10 +246,10 @@ class NeuroAction
   # @return [Hash] The JSON representation of the action.
   def serialize
     hash = {
-      "name" => @name,
-      "description" => @description,
+      name: @name,
+      description: @description,
     }
-    hash["schema"] = @schema.build unless @schema.nil?
+    hash[:schema] = @schema.build unless @schema.nil?
     return hash
   end
 end
@@ -269,8 +269,8 @@ class NeuroActionResult
   # @return [Hash]
   def serialize
     result = {
-      "id" => @id,
-      "success" => @success,
+      id: @id,
+      success: @success,
     }
     result["message"] = @message unless @message.nil?
     return result
@@ -362,10 +362,10 @@ module NeuroSDK
     # @param data [Object] The command data to send.
     def send_command(command, data = nil)
       message = {
-        "command" => command,
-        "game" => GAME,
+        command: command,
+        game: GAME,
       }
-      message["data"] = data unless data.nil?
+      message[:data] = data unless data.nil?
       @socket.send(JSON.stringify(message) + "\n")
     end
 
@@ -456,8 +456,8 @@ module NeuroSDK
     # @param silent [Boolean] If `true`, will not prompt Neuro to respond.
     def send_context(context, silent = false)
       send_command("context", {
-        "message" => context,
-        "silent" => silent,
+        message: context,
+        silent: silent,
       })
     end
 
@@ -472,7 +472,7 @@ module NeuroSDK
       end
       @actions.push(*non_duplicates)
       send_command("actions/register", {
-        "actions" => non_duplicates.map(&:serialize),
+        actions: non_duplicates.map(&:serialize),
       })
     end
 
@@ -481,7 +481,7 @@ module NeuroSDK
     def unregister_actions(action_names)
       @actions.select! {|item| !action_names.include?(item.name) }
       send_command("actions/unregister", {
-        "action_names" => action_names,
+        action_names: action_names,
       })
     end
 
@@ -498,16 +498,16 @@ module NeuroSDK
     #   `"low"`, `"medium"`, `"high"`, or `"critical"`.
     def force_actions(action_names, query, state = nil, ephemeral = false, priority = "low")
       registered_action_names = @actions.map { |action| action.name }
-      if action_names.any? { |name| registered_action_names.include?(name) }
+      unless action_names.all? { |name| registered_action_names.include?(name) }
         $stderr.puts "Warning: Some forced actions are not registered and will be ignored by Neuro."
       end
       data = {
-        "action_names" => action_names,
-        "query" => query,
-        "ephemeral_context" => ephemeral,
-        "priority" => priority,
+        action_names: action_names,
+        query: query,
+        ephemeral_context: ephemeral,
+        priority: priority,
       }
-      data["state"] = state unless state.nil?
+      data[:state] = state unless state.nil?
       send_command("actions/force", data)
     end
 
@@ -603,13 +603,13 @@ class Window_ChoiceList
             index = choices.find_index(choice)
             select(index)
             Sound.play_cursor  # Normally only played when moving the cursor
-            15.times { Fiber.yield }
+            15.times { Fiber.yield }  # Wait for 1/4 second
             select(index)  # Select again in case someone moved the selection
             process_ok
           end
         }
 
-        NeuroActionResult.new true
+        return NeuroActionResult.new true
       }
     )
     NeuroSDK.register_actions([choice_action])
