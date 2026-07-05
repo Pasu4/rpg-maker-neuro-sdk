@@ -43,6 +43,8 @@ module JSON
     def stringify(obj)
       if obj.is_a? String
         '"' + escape(obj) + '"'
+      elsif obj.is_a? Symbol
+        '"' + obj.to_s + '"'
       elsif obj.is_a?(Integer) || obj.is_a?(Float) || obj.is_a?(TrueClass) || obj.is_a?(FalseClass)
         obj.to_s
       elsif obj.nil?
@@ -237,7 +239,7 @@ module JSON
     # @return [String]
     def stringify_array(array)
       inner = array
-        .filter { |item| can_stringify?(item) }
+        .select { |item| can_stringify?(item) }
         .map { |item| stringify(item) }
         .join(',')
       "[" + inner + "]"

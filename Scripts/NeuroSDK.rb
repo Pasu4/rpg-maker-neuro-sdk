@@ -190,9 +190,9 @@ class SchemaBuilder
 
     hash["description"] = @description unless @description.nil?
 
-    hash[@minExclusive ? "exclusiveMinimum" : "minimum"] = @min.to_s unless @min.nil?
+    hash[@minExclusive ? "exclusiveMinimum" : "minimum"] = @min unless @min.nil?
 
-    hash[@maxExclusive ? "exclusiveMaximum" : "maximum"] = @max.to_s unless @max.nil?
+    hash[@maxExclusive ? "exclusiveMaximum" : "maximum"] = @max unless @max.nil?
 
     hash["enum"] = @enum unless @enum.nil?
 
@@ -204,7 +204,7 @@ class SchemaBuilder
       end
     end
 
-    required_properties = @properties.nil? ? [] : @properties.filter_map {|key, value| key unless value.optional?}
+    required_properties = @properties.nil? ? [] : @properties.select {|key, value| !value.optional?} .map {|key, value| key}
     hash["required"] = required_properties unless required_properties.empty?
 
     hash["items"] = @items.build unless @items.nil?
@@ -213,7 +213,7 @@ class SchemaBuilder
 
     hash["maxItems"] = @maxItems unless @maxItems.nil?
 
-    hash.merge!(@meta)
+    hash.merge!(@meta) unless @meta.nil?
 
     return hash
   end
@@ -232,8 +232,9 @@ class NeuroAction
   #   get to read.
   # @param schema [SchemaBuilder] The schema builder to build the schema on
   #   registration.
-  # @param callback [Proc] `((Hash, nil)) -> NeuroActionResult` callback that is called
-  #   when the action is executed.
+  # @param callback [Proc] `((Hash, nil)) -> NeuroActionResult` callback that
+  #   is called when the action is executed. **DO NOT** use any blocking calls
+  #   or `Fiber.yield` in this callback.
   def initialize(name, description, schema = nil, callback = lambda { |_| NeuroActionResult.new true })
     @name = name
     @description = description
@@ -319,7 +320,11 @@ module NeuroSDK
 
     def main()
       # Initialize
-      @game = GAME if @game.nil?
+      @connected = false
+      @command = nil
+      @socket = nil
+      @game = GAME
+      @actions = []
 
       result = ""
       while true
@@ -406,7 +411,8 @@ module NeuroSDK
       # @type [NeuroActionResult]
       result = action.callback.call(action_data)
       unless result.is_a? NeuroActionResult
-        $stderr.puts "Error: Action callback did not return an action result."
+        $stderr.puts "Warning: Action callback did not return an action result. Assuming success."
+        result = NeuroActionResult.new true
       end
       result.id = id
       send_command("action/result", result.serialize)
@@ -454,13 +460,14 @@ module NeuroSDK
 
     # Register actions with the Neuro API.
     # @param actions [Array<NeuroAction>] The array of actions to register.
-    def registerActions(actions)
+    def register_actions(actions)
       action_names = @actions.map(&:name)
       duplicates, non_duplicates = actions.partition {|action| action_names.include?(action.name)}
 
       if duplicates.size > 0
         $stderr.puts "Warning: Ignoring action(s) with duplicate name: #{duplicates.map(&:name).join(', ')}"
       end
+      @actions.push(*non_duplicates)
       send_command("actions/register", {
         "actions" => non_duplicates.map(&:serialize),
       })
@@ -469,7 +476,7 @@ module NeuroSDK
     # Unregister actions with the specified names.
     # @param action_names [Array<String>] The array of action names to unregister.
     def unregister_actions(action_names)
-      @actions.filter! {|item| action_names.include?(item.name) }
+      @actions.select! {|item| action_names.include?(item.name) }
       send_command("actions/unregister", {
         "action_names" => action_names,
       })
