@@ -4,13 +4,12 @@
         {
             "name": "Launch Proxy Server",
             "type": "node",
-            "program": "${workspaceFolder}/proxy-server/out/index.js",
+            "program": "${workspaceFolder}/proxy-server.js",
             "request": "launch",
-            "cwd": "${workspaceFolder}/proxy-server",
+            "cwd": "${workspaceFolder}",
             "skipFiles": [
                 "<node_internals>/**"
-            ],
-            "preLaunchTask": "Watch (esbuild)"
+            ]
         }
     ]
 }
