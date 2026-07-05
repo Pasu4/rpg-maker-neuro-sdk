@@ -59,7 +59,7 @@ module JSON
     # Converts an object to a hash.
     # @param obj [Object] The object to convert.
     # @return [Hash] The hash.
-    def to_hash(obj)
+    def obj_to_hash(obj)
       obj.instance_variables.each_with_object({}) do |var, hash|
         hash[var.to_s.delete('@')] = obj.instance_variable_get(var)
       end
@@ -230,7 +230,7 @@ module JSON
     # @param obj [Object]
     # @return [String]
     def stringify_object(obj)
-      stringify_hash(to_hash(obj))
+      stringify_hash(obj_to_hash(obj))
     end
 
     # @param array [Array]

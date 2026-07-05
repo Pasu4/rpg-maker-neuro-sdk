@@ -21,55 +21,11 @@ HOST = "127.0.0.1"
 # The port the proxy is running on.
 PORT = 7689
 # # The maximum number of frames to wait for a command.
-# SOCKET_TIMEOUT = 60
+GAME = "RPG Maker Game"
 
 ###############################################################################
 #                           END OF CONFIGURATION                              #
 ###############################################################################
-
-#----------------------------------------------------------------------------
-#   Utility
-#----------------------------------------------------------------------------
-
-module NeuroSDKUtils
-  class << self
-    $encode64_table = [
-      "A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P",
-      "Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f",
-      "g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v",
-      "w","x","y","z","0","1","2","3","4","5","6","7","8","9","+","/",
-    ]
-    $decode64_table = Hash[$encode64_table.zip(0...$encode64_table.size)]
-
-    def encode64(string)
-      result = []
-      chunks = string.bytes.each_slice(3)
-      for chunk in chunks
-        result.push   chunk[0] >> 2
-        result.push  (chunk[0] << 4) & 63
-        result[-1] |= chunk[1] >> 4       if chunk.size >= 2
-        result.push  (chunk[1] << 2) & 63 if chunk.size >= 2
-        result[-1] |= chunk[2] >> 6       if chunk.size >= 3
-        result.push   chunk[2]       & 63 if chunk.size >= 3
-      end
-      result.map { |n| $encode64_table[n] } .join
-    end
-
-    def decode64(string)
-      result = []
-      chunks = string.chars.map { |c| $decode64_table[c] } .each_slice(4)
-      for chunk in chunks
-        result.push  (chunk[0] << 2) & 255
-        result[-1] |= chunk[1] >> 4        if chunk.size >= 2
-        result.push  (chunk[1] << 4) & 255 if chunk.size >= 2
-        result[-1] |= chunk[2] >> 2        if chunk.size >= 3
-        result.push  (chunk[2] << 6) & 255 if chunk.size >= 3
-        result[-1] |= chunk[3]             if chunk.size >= 4
-      end
-      result.map(&:chr).join
-    end
-  end
-end
 
 class SchemaBuilder
   class << self
@@ -121,35 +77,6 @@ class SchemaBuilder
       SchemaBuilder.new
         .enum(enum)
     end
-
-    # Escape a string so it can be pasted into a JSON string.
-    # @param string [String] The string to escape.
-    # @return [String] The escaped string.
-    def escape(string)
-      string
-        .gsub(/["\\]/, "\\\\\\&")
-        .gsub(/[\b]/, "\\\\b")
-        .gsub(/\f/, "\\\\f")
-        .gsub(/\n/, "\\\\n")
-        .gsub(/\r/, "\\\\r")
-        .gsub(/\t/, "\\\\t")
-        # leaving out \u#### because no
-    end
-
-    # @param value [String, Integer, Float, Boolean, nil] The value to convert
-    #   to a JSON value. Does not support arrays and objects.
-    # @return [String] The JSON value.
-    def json_value(value)
-      if value.is_a? String
-        return '"' + escape(value) + '"'
-      elsif value.is_a?(Integer) || value.is_a?(Float) || value.is_a?(TrueClass) || value.is_a?(FalseClass)
-        return value.to_s
-      elsif value.nil?
-        return 'null'
-      end
-
-      $stderr.puts "Error: Class #{value.class} is not supported."
-    end
   end
 
   def optional?; @optional end
@@ -183,7 +110,7 @@ class SchemaBuilder
     self
   end
 
-  # @param enum [Array] Array of accepted values. Only supports primitives.
+  # @param enum [Array] Array of accepted values.
   # @return [SchemaBuilder] Itself for chaining.
   def enum(enum)
     @enum = enum
@@ -243,94 +170,113 @@ class SchemaBuilder
     self
   end
 
-  # Build the JSON schema.
-  # @return [String] The string representing the schema.
-  def build
-    result = "{"
-    comma = false
-
-    # type
-    if @types.size == 1
-      comma = true
-      result << '"type":"' << @types[0].to_s << '"'
-    elsif @types.size > 1
-      comma = true
-      result << '"type":["' << @types.map(&:to_s).join('","') << '"]'
-    end
-
-    # description
-    unless @description.nil?
-      result << ',' if comma
-      comma = true
-      result << '"description":"' << SchemaBuilder.escape(@description) << '"'
-    end
-
-    # minimum
-    unless @min.nil?
-      result << ',' if comma
-      comma = true
-      result << (@minExclusive ? '"exclusiveMinimum":' : '"minimum":') << @min.to_s
-    end
-
-    # maximum
-    unless @max.nil?
-      result << ',' if comma
-      comma = true
-      result << (@maxExclusive ? '"exclusiveMaximum":' : '"maximum":') << @max.to_s
-    end
-
-    # enum
-    unless @enum.nil?
-      result << ',' if comma
-      comma = true
-      result << '"enum":[' << @enum.map {|item| SchemaBuilder.json_value(item)} .join(',') << ']'
-    end
-
-    # properties
-    unless @properties.nil?
-      result << ',' if comma
-      comma = true
-      propcomma = false
-      result << '"properties":{'
-      @properties.each do |key, value|
-        result << ',' if propcomma
-        propcomma = true
-        result << '"' << key << '":' << value.build  # Recursively build properties
-      end
-      result << "}"
-    end
-
-    # required
-    required_properties = @properties.nil? ? [] : @properties.filter_map {|key, value| key unless value.optional?}
-    if required_properties.size > 0
-      result << ',' if comma
-      comma = true
-      result << '"required":["' << required_properties.join('","') << '"]'
-    end
-
-    # items
-    unless @items.nil?
-      result << ',' if comma
-      comma = true
-      result << '"items":' << @items.build
-    end
-
-    # minItems
-    unless @minItems.nil?
-      result << ',' if comma
-      comma = true
-      result << '"minItems":' << @minItems.to_s
-    end
-
-    # maxItems
-    unless @maxItems.nil?
-      result << ',' if comma
-      comma = true
-      result << '"maxItems":' << @maxItems.to_s
-    end
-
-    result << "}"
+  # Add additional data to the schema.
+  # @param meta [Hash] A hash containing the additional data.
+  # @return [SchemaBuilder] Itself for chaining.
+  def meta(meta)
+    @meta = meta
   end
+
+  # Build the JSON schema.
+  # @return [Hash] The hash representing the schema.
+  def build
+    hash = {}
+
+    if @types.size == 1
+      hash["type"] = @types[0]
+    elsif @types.size > 1
+      hash["type"] = @types
+    end
+
+    hash["description"] = @description unless @description.nil?
+
+    hash[@minExclusive ? "exclusiveMinimum" : "minimum"] = @min.to_s unless @min.nil?
+
+    hash[@maxExclusive ? "exclusiveMaximum" : "maximum"] = @max.to_s unless @max.nil?
+
+    hash["enum"] = @enum unless @enum.nil?
+
+    unless @properties.nil?
+      property_hash = {}
+      hash["properties"] = property_hash
+      @properties.each do |key, value|
+        property_hash[key] = value.build  # Recursively build properties
+      end
+    end
+
+    required_properties = @properties.nil? ? [] : @properties.filter_map {|key, value| key unless value.optional?}
+    hash["required"] = required_properties unless required_properties.empty?
+
+    hash["items"] = @items.build unless @items.nil?
+
+    hash["minItems"] = @minItems unless @minItems.nil?
+
+    hash["maxItems"] = @maxItems unless @maxItems.nil?
+
+    hash.merge!(@meta)
+
+    return hash
+  end
+end
+
+class NeuroAction
+  # The name of the action.
+  attr_reader :name
+  # `((Hash, nil)) -> NeuroActionResult` callback that is called when the action is executed.
+  attr_accessor :callback
+
+  # Create a new action with a name and a description.
+  # @param name [String] The name of the action. Must be all lowercase with
+  #   underscores.
+  # @param description [String] The description of the action that Neuro will
+  #   get to read.
+  # @param schema [SchemaBuilder] The schema builder to build the schema on
+  #   registration.
+  # @param callback [Proc] `((Hash, nil)) -> NeuroActionResult` callback that is called
+  #   when the action is executed.
+  def initialize(name, description, schema = nil, callback = -> (_) {NeuroActionResult.success})
+    @name = name
+    @description = description
+    @schema = schema
+    @callback = callback
+  end
+
+  # Serialize the action into a hash.
+  # @return [Hash] The JSON representation of the action.
+  def serialize
+    hash = {
+      "name" => @name,
+      "description" => @description,
+    }
+    hash["schema"] = @schema.build unless @schema.nil?
+    return hash
+  end
+end
+
+class NeuroActionResult
+
+  # @param success [String] If `true` and an action force is active, Neuro is
+  #   instructed to retry executing an action.
+  # @param message [String, nil] An optional message to send Neuro along with
+  #   the result. If the action failed, it should contain the reason.
+  def initialize(success, message = nil)
+    @id = nil
+    @success = success
+    @message = message
+  end
+
+  # Serialize this object to a hash.
+  # @return [Hash]
+  def serialize
+    result = {
+      "id" => @id,
+      "success" => @success,
+    }
+    result["message"] = @message unless @message.nil?
+    return result
+  end
+
+  attr_writer :id
 end
 
 # Contains methods for communicating with the Neuro API.
@@ -345,13 +291,22 @@ module NeuroSDK
 
     # The message queue from the socket.
     # It will only be valid for a single frame after joining.
+    # @type [Hash, nil]
     @command = nil
 
     # The TCP socket.
     @socket = nil
 
+    # # A hash of configuration values sent by the server.
+    # # @type [Hash{String => String}]
+    # @config = {}
+
     # The main fiber
     @fiber = Fiber.new { main }
+
+    # Array of registered actions
+    # @type [Array<NeuroAction>]
+    @actions = []
 
     def connected?
       @connected
@@ -375,49 +330,84 @@ module NeuroSDK
           buffer.gsub!(0.chr, "")           # Remove null characters
           result += buffer
           if result.count("\n") > 0   # End after a newline is encountered
-            @command, result = result.split("\n", 2)
+            command_str, result = result.split("\n", 2)
+            @command = JSON.parse(command_str)
             handle_command
           end
         else
           Fiber.yield
         end
       end
-
-      if waited_frames >= max_wait_frames
-        result = ""
-      end
     end
 
     def handle_command
-      id, data = @command.split(":", 2)
-      puts "Got command #{@command}"
-
-      case id
-      when "ok"
-        # Give joined fibers time to react to the response
-        Fiber.yield
+      if @command["command"].nil?
+        $stderr.puts "Error: Invalid format for command."
+      end
+      case @command["command"]
+      when "startup"
+        handle_startup(@command["data"])
+      when "action"
+        handle_action(@command["data"])
+      when "proxy/connected"  # Custom command of the proxy
+        @connected = true
       else
         $stderr.puts "Error: Got unknown command '#{@command}'"
       end
+      # Give joined fibers time to react to the response
+      Fiber.yield
       @command = nil
     end
 
+    # Send a command over the TCP socket.
+    # @param command [String] The command ID.
+    # @param data [Object] The command data to send.
+    def send_command(command, data = nil)
+      message = {
+        "command" => command,
+        "game" => @game,
+      }
+      message["data"] = data unless data.nil?
+      @socket.send(JSON.stringify(message) + "\n")
+    end
+
     # Wait for a command from Neuro.
-    # - **timeout:**
-    #   Timeout in frames. Default is 3600 (1 minute).
+    # @param timeout [Integer] Timeout in frames. Default is 3600 (1 minute).
+    # @return [String, nil] The parsed command, or `nil` if no command is
+    #   received within the timeout.
     def join(timeout = 3600)
       frames = 0
       while frames < timeout
-        if @command != nil
-          command = @command  # Cache so it doesn't get deleted
-          @command = nil
-          return command
-        end
+        return @command unless @command.nil?
         frames += 1
         Fiber.yield
       end
-      $stderr.puts "Error: Server took too long to respond (expected a response within #{timeout/60}s)."
+      $stderr.puts "Error: Server took too long to respond (expected a response within #{timeout/60.0}s)."
       nil
+    end
+
+    # Handle the `startup` command.
+    # @param data [Hash] Action data.
+    def handle_startup(data)
+      @session_id = data["session"]["sessionId"]
+      @character_id = data["session"]["characterId"]
+      @display_name = data["session"]["displayName"]
+    end
+
+    # Handle the `action` command.
+    # @param data [Hash] Action data.
+    def handle_action(data)
+      name = data["name"]
+      id = data["id"]
+      action = @actions.find {|item| item.name == name}
+      action_data = data["data"].nil? ? nil : JSON.parse(data["data"])
+      # @type [NeuroActionResult]
+      result = action.callback.call(action_data)
+      unless result.is_a? NeuroActionResult
+        $stderr.puts "Error: Action callback did not return an action result."
+      end
+      result.id = id
+      send_command("action/result", result.serialize)
     end
 
     #------------------------------------------------------------------------
@@ -441,16 +431,72 @@ module NeuroSDK
       # Create the socket
       @socket = TCPSocket.new HOST, PORT
       # Wait for the server to send the OK signal
-      @connected = join(60) == "ok"
+      join(60)
       if !@connected
-        $stderr.puts "Error: Did not receive OK from server."
+        $stderr.puts "Error: Did not receive connection confirmation from server."
+        return false
       end
-      @connected
+      send_command("startup")
+      return true
     end
 
     # Sends a context message to Neuro.
-    def send_context(context)
-      @socket.send("context:#{NeuroSDKUtils.encode64(context)}")
+    # @param context [String] The context to send.
+    # @param silent [Boolean] If `true`, will not prompt Neuro to respond.
+    def send_context(context, silent = false)
+      send_command("context", {
+        "message" => context,
+        "silent" => silent,
+      })
+    end
+
+    # Register actions with the Neuro API.
+    # @param actions [Array<NeuroAction>] The array of actions to register.
+    def registerActions(actions)
+      action_names = @actions.map(&:name)
+      duplicates, non_duplicates = actions.partition {|action| action_names.include?(action.name)}
+
+      if duplicates.size > 0
+        $stderr.puts "Warning: Ignoring action(s) with duplicate name: #{duplicates.map(&:name).join(', ')}"
+      end
+      send_command("actions/register", {
+        "actions" => non_duplicates.map(&:serialize),
+      })
+    end
+
+    # Unregister actions with the specified names.
+    # @param action_names [Array<String>] The array of action names to unregister.
+    def unregister_actions(action_names)
+      @actions.filter! {|item| action_names.include?(item.name) }
+      send_command("actions/unregister", {
+        "action_names" => action_names,
+      })
+    end
+
+    # Force Neuro to execute one of the actions listed in `action_names`.
+    # @param action_names [Array<string>] The names of actions that Neuro
+    #   should execute one of.
+    # @param query [String] A string that explains to Neuro what she is
+    #   supposed to do.
+    # @param state [String, nil] The current state of the game, if applicable.
+    #   Can be any format, but Markdown is recommended.
+    # @param ephemeral [Boolean] If `true`, Neuro will not remember the `state`
+    #   and `query` after executing the action.
+    # @param priority [String] The priority (see the API spec). Must be
+    #   `"low"`, `"medium"`, `"high"`, or `"critical"`.
+    def force_actions(action_names, query, state = nil, ephemeral = false, priority = "low")
+      registered_action_names = @actions.map { |action| action.name }
+      if action_names.any? { |name| registered_action_names.include?(name) }
+        $stderr.puts "Warning: Some forced actions are not registered and will be ignored by Neuro."
+      end
+      data = {
+        "action_names" => action_names,
+        "query" => query,
+        "ephemeral" => ephemeral,
+        "priority" => priority,
+      }
+      data["state"] = state unless state.nil?
+      send_command("actions/force", data)
     end
   end
 end
