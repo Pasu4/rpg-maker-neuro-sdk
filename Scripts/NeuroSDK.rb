@@ -234,7 +234,7 @@ class NeuroAction
   #   registration.
   # @param callback [Proc] `((Hash, nil)) -> NeuroActionResult` callback that
   #   is called when the action is executed. **DO NOT** use any blocking calls
-  #   or `Fiber.yield` in this callback.
+  #   or `Fiber.yield` in this callback (use `NeuroSDK.async` for that).
   def initialize(name, description, schema = nil, callback = lambda { |_| NeuroActionResult.new true })
     @name = name
     @description = description
@@ -282,32 +282,6 @@ end
 # Contains methods for communicating with the Neuro API.
 module NeuroSDK
   class << self
-    #--------------------------------------------------------------------------
-    #   Class variables
-    #--------------------------------------------------------------------------
-
-    # Whether the SDK is connected to the proxy server.
-    @connected = false
-
-    # The message queue from the socket.
-    # It will only be valid for a single frame after joining.
-    # @type [Hash, nil]
-    @command = nil
-
-    # The TCP socket.
-    @socket = nil
-
-    # # A hash of configuration values sent by the server.
-    # # @type [Hash{String => String}]
-    # @config = {}
-
-    # The main fiber
-    @fiber = Fiber.new { main }
-
-    # Array of registered actions
-    # @type [Array<NeuroAction>]
-    @actions = []
-
     def connected?
       @connected
     end
@@ -318,13 +292,30 @@ module NeuroSDK
 
     private
 
-    def main()
-      # Initialize
+    def init
+      return if @initialized
+
+      @initialized = true
+      # Whether the SDK is connected to the proxy server.
       @connected = false
+      # The message queue from the socket.
+      # It will only be valid for a single frame after joining.
+      # @type [Hash, nil]
       @command = nil
+      # The TCP socket.
       @socket = nil
-      @game = GAME
+      # The main fiber
+      @fiber = Fiber.new { main } if @fiber.nil?
+      # Array of registered actions
+      # @type [Array<NeuroAction>]
       @actions = []
+      # Array of async fibers from action executions
+      # @type [Array<Fiber>]
+      @async_fibers = []
+    end
+
+    def main
+      init
 
       result = ""
       while true
@@ -372,7 +363,7 @@ module NeuroSDK
     def send_command(command, data = nil)
       message = {
         "command" => command,
-        "game" => @game,
+        "game" => GAME,
       }
       message["data"] = data unless data.nil?
       @socket.send(JSON.stringify(message) + "\n")
@@ -428,10 +419,22 @@ module NeuroSDK
     def update
       @fiber = Fiber.new { main } unless @fiber
       @fiber.resume
+
+      # Update async fibers
+      dead_fibers = []
+      @async_fibers.each { |fiber|
+        begin
+          fiber.resume
+        rescue FiberError
+          dead_fibers.push(fiber)
+        end
+      }
+      @async_fibers -= dead_fibers
     end
 
     # Connect to the Neuro API proxy server.
     def connect
+      init
       if @connected
         $stderr.puts "Warning: Attempted to connect while already connected."
         return
@@ -476,7 +479,7 @@ module NeuroSDK
     # Unregister actions with the specified names.
     # @param action_names [Array<String>] The array of action names to unregister.
     def unregister_actions(action_names)
-      @actions.select! {|item| action_names.include?(item.name) }
+      @actions.select! {|item| !action_names.include?(item.name) }
       send_command("actions/unregister", {
         "action_names" => action_names,
       })
@@ -501,11 +504,36 @@ module NeuroSDK
       data = {
         "action_names" => action_names,
         "query" => query,
-        "ephemeral" => ephemeral,
+        "ephemeral_context" => ephemeral,
         "priority" => priority,
       }
       data["state"] = state unless state.nil?
       send_command("actions/force", data)
+    end
+
+
+    # Execute an action asynchronously.
+    #
+    # Example:
+    #
+    #   NeuroAction.new(
+    #     "do_something",
+    #     "Do something",
+    #     nil,
+    #     lambda {
+    #       NeuroSDK.async {
+    #         60.times { Fiber.yield }  # Wait 1 second
+    #
+    #         # (Do something)
+    #       }
+    #       return NeuroActionResult.new true
+    #     }
+    #   )
+    #
+    # @param &proc [Proc] Code to execute.
+    def async(&proc)
+      @async_fibers.push (Fiber.new { proc.call })
+      nil
     end
   end
 end
@@ -530,5 +558,83 @@ class Window_Message
     # Send text to Neuro when it is printed on screen
     NeuroSDK.send_context($game_message.all_text) if NeuroSDK.connected?
     _neurosdk_process_all_text
+  end
+end
+
+DIALOGUE_CHOICE_ACTION_NAME = "dialogue_choice"
+DIALOGUE_CHOICE_ACTION_CANCEL = "(cancel)"
+
+class Window_ChoiceList
+  alias_method :_neurosdk_start, :start
+  alias_method :_neurosdk_call_ok_handler, :call_ok_handler
+  alias_method :_neurosdk_call_cancel_handler, :call_cancel_handler
+
+  def start
+    _neurosdk_start
+
+    return unless NeuroSDK.connected?
+
+    # @type [Array<String>]
+    choices = $game_message.choices
+    # choice_cancel_type == 0: Cancel disabled
+    # choice_cancel_type == 5: Separate branch
+    choices.push DIALOGUE_CHOICE_ACTION_CANCEL if $game_message.choice_cancel_type == 5
+
+    # Register an action to choose an option
+    choice_action = NeuroAction.new(
+      DIALOGUE_CHOICE_ACTION_NAME,
+      "Choose a dialogue option.",
+      SchemaBuilder.object({
+        choice: SchemaBuilder.enum(choices)
+      }),
+      lambda { |data|
+        # Check that it is actually one of the options
+        unless choices.include?(data["choice"])
+          return NeuroActionResult.new false, "Invalid choice. Must be one of: '#{choices.join("', '")}'"
+        end
+
+        NeuroSDK.unregister_actions([DIALOGUE_CHOICE_ACTION_NAME])
+        choice = data["choice"]
+
+        NeuroSDK.async {
+          if choice == DIALOGUE_CHOICE_ACTION_CANCEL
+            process_cancel
+          else
+            index = choices.find_index(choice)
+            select(index)
+            Sound.play_cursor  # Normally only played when moving the cursor
+            15.times { Fiber.yield }
+            select(index)  # Select again in case someone moved the selection
+            process_ok
+          end
+        }
+
+        NeuroActionResult.new true
+      }
+    )
+    NeuroSDK.register_actions([choice_action])
+
+    # Force the action
+    NeuroSDK.force_actions(
+      [DIALOGUE_CHOICE_ACTION_NAME],
+      "You need to choose a dialogue option.",
+      "Current dialogue:\n\n#{$game_message.all_text}",
+    )
+  end
+
+  def call_ok_handler
+    _neurosdk_call_ok_handler
+
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([DIALOGUE_CHOICE_ACTION_NAME])
+  end
+
+  def call_cancel_handler
+    _neurosdk_call_cancel_handler
+
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([DIALOGUE_CHOICE_ACTION_NAME])
   end
 end

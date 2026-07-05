@@ -131,4 +131,5 @@
 .rgss-script-editor
 
 # Other random files
-test.rb
+/test.rb
+/proxy-server.exe
