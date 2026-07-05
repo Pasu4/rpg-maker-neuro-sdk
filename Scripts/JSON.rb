@@ -247,7 +247,7 @@ module JSON
     # @return [String]
     def stringify_hash(hash)
       inner = hash
-        .filter { |_, value| can_stringify?(value) }
+        .select { |_, value| can_stringify?(value) }
         .map { |key, value| '"' + escape(key.to_s) + '":' + stringify(value) }
         .join(',')
       "{" + inner + "}"

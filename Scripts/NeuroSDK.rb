@@ -20,7 +20,7 @@
 HOST = "127.0.0.1"
 # The port the proxy is running on.
 PORT = 7689
-# # The maximum number of frames to wait for a command.
+# The name of the game used for the Neuro API
 GAME = "RPG Maker Game"
 
 ###############################################################################
@@ -234,7 +234,7 @@ class NeuroAction
   #   registration.
   # @param callback [Proc] `((Hash, nil)) -> NeuroActionResult` callback that is called
   #   when the action is executed.
-  def initialize(name, description, schema = nil, callback = -> (_) {NeuroActionResult.success})
+  def initialize(name, description, schema = nil, callback = lambda { |_| NeuroActionResult.new true })
     @name = name
     @description = description
     @schema = schema
@@ -254,7 +254,6 @@ class NeuroAction
 end
 
 class NeuroActionResult
-
   # @param success [String] If `true` and an action force is active, Neuro is
   #   instructed to retry executing an action.
   # @param message [String, nil] An optional message to send Neuro along with
@@ -319,6 +318,9 @@ module NeuroSDK
     private
 
     def main()
+      # Initialize
+      @game = GAME if @game.nil?
+
       result = ""
       while true
         Fiber.yield while @socket.nil?
