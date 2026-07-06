@@ -8,15 +8,22 @@ Very WIP.
 The integration comes in two parts: Ruby scripts for RPG Maker and a proxy server that allows it to talk to the Neuro API.
 
 To install the scripts into your game, open the script editor (F11), create scripts below `( Insert here )` and paste the content of the Ruby files there.
-The order should be `RubyLibraryCode.rb`, then `NeuroSDK.rb`.
+The order should be `RubyLibraryCode.rb`, `JSON.rb`, `NeuroSDK.rb`.
 To connect to the Neuro API, add a script command containing `NeuroSDK.connect` to an event.
 Note that the proxy server must be started at this point, otherwise the connection will fail.
 
-For the proxy server, go into the `proxy-server` folder and build the package with `npm run build`.
-After that, you can start the server using `npm run start`.
-I'll probably just distribute the JS file later for this.
+For the proxy server, run the JavaScript file using `node proxy-server.js`.
+I'll build and release this as a standalone executable at some point.
 
-Currently, only context from dialogue boxes is implemented.
+All the main functionality of the API specification is implemented.
+Additionally, Neuro will get context from dialogue boxes and can choose dialogue options.
+The following is also planned in the future:
+- Signifying the speaker in messages
+- Equipping weapons/armor/etc.
+- Using items from the inventory
+- Buying/selling stuff at shops
+- Fighting battles
+- Walking / pathing to points of interest on the map
 
 ## Technical information
 
@@ -26,6 +33,3 @@ I got this code from [a WordPress article](https://lthzelda.wordpress.com/2010/0
 
 The SDK runs in a loop, constantly checking if there are new messages on the socket.
 Since the buffer is continuous, messages are delimited by newline characters.
-Things like in-game dialogue have to be converted to base64 because of this limitation.
-A message always contains a command, which is separated from the rest of the data with a colon (`:`).
-The data can also contain more colons, as the command identifier is only considered up to the first colon.
