@@ -766,8 +766,7 @@ class Window_PartyCommand
     choice_action = NeuroAction.make_command_window_action(
       PARTY_COMMAND_ACTION_NAME,
       "Choose an action for the party.",
-      self,
-      [1]  # DEBUG: Disable escape
+      self
     )
     NeuroSDK.register_actions([choice_action])
 
@@ -898,16 +897,17 @@ def format_skill(skill)
     line << "No cost"
   end
   line << "): "
-  line << skill.description
+  line << skill.description.gsub("\n", " ")
 end
 
 class Window_BattleSkill
-  alias_method :_neurosdk_show, :show
+  alias_method :_neurosdk_activate, :activate
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
 
-  def show
-    result = _neurosdk_show
+  def activate
+    result = _neurosdk_activate
     return result unless NeuroSDK.connected?
+    return result if NeuroSDK.forced?
 
     choice_action = NeuroAction.make_selectable_window_action(
       BATTLE_SKILL_ACTION_NAME,
@@ -960,12 +960,13 @@ end
 BATTLE_ITEM_ACTION_NAME = "choose_item"
 
 class Window_BattleItem
-  alias_method :_neurosdk_show, :show
+  alias_method :_neurosdk_activate, :activate
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
 
-  def show
-    result = _neurosdk_show
+  def activate
+    result = _neurosdk_activate
     return result unless NeuroSDK.connected?
+    return result if NeuroSDK.forced?
 
     choice_action = NeuroAction.make_selectable_window_action(
       BATTLE_ITEM_ACTION_NAME,
@@ -975,6 +976,8 @@ class Window_BattleItem
       (0...@data.size).select { |i| !enable?(@data[i]) }
     )
     NeuroSDK.register_actions([choice_action])
+
+    # TODO: Item format and state
 
     NeuroSDK.force_actions(
       [BATTLE_ITEM_ACTION_NAME],

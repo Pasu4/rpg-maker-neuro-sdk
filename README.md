@@ -75,7 +75,7 @@ I didn't check what all of these do, some may be removed from this list if they'
 - [x] Window_PartyCommand
 - [x] Window_ActorCommand
 - [x] Window_BattleStatus
-- [x] Window_BattleActor
+- [ ] Window_BattleActor
 - [x] Window_BattleEnemy
 - [x] Window_BattleSkill
 - [x] Window_BattleItem
