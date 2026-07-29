@@ -22,6 +22,8 @@ HOST = "127.0.0.1"
 PORT = 7689
 # The name of the game used for the Neuro API
 GAME = "RPG Maker Game"
+# Whether Neuro can controll the party command (Fight/Escape)
+CAN_PARTY_COMMAND = true
 
 ###############################################################################
 #                           END OF CONFIGURATION                              #
@@ -219,6 +221,8 @@ class SchemaBuilder
   end
 end
 
+COMMAND_WINDOW_ACTION_CANCEL = "(cancel)"
+
 class NeuroAction
   # The name of the action.
   attr_reader :name
@@ -252,9 +256,86 @@ class NeuroAction
     hash[:schema] = @schema.build unless @schema.nil?
     return hash
   end
+
+  class << self
+    # Make an action for a `Window_Selectable`.
+    # @param action_name [String] The name of the action.
+    # @param description [String] The description of the action.
+    # @param window [Window_Selectable] The command window to make a choice in.
+    # @param choices [Array<String>] The options to choose from, in the order
+    #   they are selectable in the window.
+    # @param invalid_choices [Array<Integer>] Indices of choices that should be
+    #   ignored. An empty array by default.
+    # @return [NeuroAction] An action with the choices.
+    def make_selectable_window_action(action_name, description, window, choices, invalid_choices = [])
+      valid_choices = choices.dup
+
+      if window.cancel_enabled?
+        valid_choices.push(COMMAND_WINDOW_ACTION_CANCEL)
+      end
+
+      invalid_choices.sort.reverse.each do |i|
+        valid_choices.delete_at(i)
+      end
+
+      return NeuroAction.new(
+        action_name,
+        description,
+        SchemaBuilder.object({
+          choice: SchemaBuilder.enum(valid_choices)
+        }),
+        lambda { |data|
+          # Check that it is actually one of the options
+          unless valid_choices.include?(data["choice"])
+            return NeuroActionResult.new false, "Invalid choice. Must be one of: '#{valid_choices.join("', '")}'"
+          end
+
+          NeuroSDK.unregister_actions([action_name])
+          choice = data["choice"]
+
+          NeuroSDK.async {
+            if choice == COMMAND_WINDOW_ACTION_CANCEL
+              window.process_cancel
+            else
+              index = choices.find_index(choice)
+              window.select(index)
+              Sound.play_cursor  # Normally only played when moving the cursor
+              15.times { Fiber.yield }  # Wait for 1/4 second
+              window.select(index)  # Select again in case someone moved the selection
+              window.process_ok
+            end
+          }
+
+          return NeuroActionResult.new true
+        }
+      )
+    end
+    # Make an action for a `Window_Command`.
+    # @param action_name [String] The name of the action.
+    # @param description [String] The description of the action.
+    # @param window [Window_Command] The command window to make a choice in.
+    # @param invalid_choices [Array<Integer>] Indices of choices that should be
+    #   ignored. An empty array by default.
+    # @return [NeuroAction] An action with the choices.
+    def make_command_window_action(action_name, description, window, invalid_choices = [])
+      choices = window.instance_variable_get(:@list)
+        .select { |item| item[:enabled] }
+        .map { |item| item[:name] }
+
+      return NeuroAction.make_selectable_window_action(
+        action_name,
+        description,
+        window,
+        choices,
+        invalid_choices
+      )
+    end
+  end
 end
 
 class NeuroActionResult
+  attr_reader :success
+
   # @param success [String] If `true` and an action force is active, Neuro is
   #   instructed to retry executing an action.
   # @param message [String, nil] An optional message to send Neuro along with
@@ -286,6 +367,10 @@ module NeuroSDK
       @connected
     end
 
+    def forced?
+      @forced
+    end
+
     #------------------------------------------------------------------------
     #   Private functions
     #------------------------------------------------------------------------
@@ -312,6 +397,9 @@ module NeuroSDK
       # Array of async fibers from action executions
       # @type [Array<Fiber>]
       @async_fibers = []
+      # Whether an action force is active.
+      # @type [Boolean]
+      @forced = false
     end
 
     def main
@@ -406,6 +494,7 @@ module NeuroSDK
         result = NeuroActionResult.new true
       end
       result.id = id
+      @forced = false if result.success
       send_command("action/result", result.serialize)
     end
 
@@ -509,6 +598,7 @@ module NeuroSDK
       }
       data[:state] = state unless state.nil?
       send_command("actions/force", data)
+      @forced = true
     end
 
 
@@ -561,8 +651,7 @@ class Window_Message
   end
 end
 
-DIALOGUE_CHOICE_ACTION_NAME = "dialogue_choice"
-DIALOGUE_CHOICE_ACTION_CANCEL = "(cancel)"
+DIALOGUE_CHOICE_ACTION_NAME = "choose_dialogue_option"
 
 class Window_ChoiceList
   alias_method :_neurosdk_start, :start
@@ -574,43 +663,14 @@ class Window_ChoiceList
 
     return unless NeuroSDK.connected?
 
-    # @type [Array<String>]
-    choices = $game_message.choices
     # choice_cancel_type == 0: Cancel disabled
     # choice_cancel_type == 5: Separate branch
-    choices.push DIALOGUE_CHOICE_ACTION_CANCEL if $game_message.choice_cancel_type == 5
 
     # Register an action to choose an option
-    choice_action = NeuroAction.new(
+    choice_action = NeuroAction.make_command_window_action(
       DIALOGUE_CHOICE_ACTION_NAME,
       "Choose a dialogue option.",
-      SchemaBuilder.object({
-        choice: SchemaBuilder.enum(choices)
-      }),
-      lambda { |data|
-        # Check that it is actually one of the options
-        unless choices.include?(data["choice"])
-          return NeuroActionResult.new false, "Invalid choice. Must be one of: '#{choices.join("', '")}'"
-        end
-
-        NeuroSDK.unregister_actions([DIALOGUE_CHOICE_ACTION_NAME])
-        choice = data["choice"]
-
-        NeuroSDK.async {
-          if choice == DIALOGUE_CHOICE_ACTION_CANCEL
-            process_cancel
-          else
-            index = choices.find_index(choice)
-            select(index)
-            Sound.play_cursor  # Normally only played when moving the cursor
-            15.times { Fiber.yield }  # Wait for 1/4 second
-            select(index)  # Select again in case someone moved the selection
-            process_ok
-          end
-        }
-
-        return NeuroActionResult.new true
-      }
+      self
     )
     NeuroSDK.register_actions([choice_action])
 
@@ -638,3 +698,299 @@ class Window_ChoiceList
     NeuroSDK.unregister_actions([DIALOGUE_CHOICE_ACTION_NAME])
   end
 end
+
+# TODO: Window_Command
+# TODO: Window_HorzCommand
+# TODO: Window_Help
+# TODO: Window_Gold
+# TODO: Window_MenuCommand
+# TODO: Window_MenuStatus
+# TODO: Window_MenuActor
+# TODO: Window_ItemCategory
+# TODO: Window_ItemList
+# TODO: Window_SkillCommand
+# TODO: Window_SkillStatus
+# TODO: Window_SkillList
+# TODO: Window_EquipStatus
+# TODO: Window_EquipCommand
+# TODO: Window_EquipSlot
+# TODO: Window_EquipItem
+# TODO: Window_Status
+# TODO: Window_SaveFile
+# TODO: Window_ShopCommand
+# TODO: Window_ShopBuy
+# TODO: Window_ShopSell
+# TODO: Window_ShopNumber
+# TODO: Window_ShopStatus
+# TODO: Window_NameEdit
+# TODO: Window_NameInput
+# TODO: Window_NumberInput
+# TODO: Window_KeyItem
+# TODO: Window_ScrollText
+# TODO: Window_MapName
+
+class Window_BattleLog
+  alias_method :_neurosdk_add_text, :add_text
+  alias_method :_neurosdk_replace_text, :replace_text
+
+
+  # @param text [String] <description>
+  def add_text(text)
+    _neurosdk_add_text(text)
+
+    unless text.empty?
+      NeuroSDK.send_context(text)
+    end
+  end
+
+  def replace_text(text)
+    _neurosdk_replace_text(text)
+
+    unless text.empty?
+      NeuroSDK.send_context(text)
+    end
+  end
+end
+
+PARTY_COMMAND_ACTION_NAME = "choose_party_action"
+
+class Window_PartyCommand
+  alias_method :_neurosdk_setup, :setup
+  alias_method :_neurosdk_call_ok_handler, :call_ok_handler
+
+  def setup
+    _neurosdk_setup
+
+    return unless NeuroSDK.connected? and CAN_PARTY_COMMAND
+
+    choice_action = NeuroAction.make_command_window_action(
+      PARTY_COMMAND_ACTION_NAME,
+      "Choose an action for the party.",
+      self,
+      [1]  # DEBUG: Disable escape
+    )
+    NeuroSDK.register_actions([choice_action])
+
+    # Explain battle state
+
+    # @type [Array<string>]
+    # @param member [Game_Actor]
+    party = $game_party.members.map { |member|
+      member_class = $data_classes[$game_party.members[0].class_id].name
+      "- #{member.name} (Level #{member.level} #{member_class}, HP #{member.hp}/#{member.mhp}, MP #{member.mp}/#{member.mmp})"
+    }
+    # @type [Array<string>]
+    # @param member [Game_Enemy]
+    enemies = $game_troop.alive_members.map { |member|
+      "- #{member.original_name}#{member.plural ? member.letter : ''}"
+    }
+
+    state = "Your party consists of:\n\n"
+    state << party.join("\n")
+    state << "\n\nThere are #{$game_troop.alive_members.size} enemies:\n\n"
+    state << enemies.join("\n")
+    state << "\n\nYou cannot escape from this battle." unless BattleManager.can_escape?
+
+    NeuroSDK.force_actions(
+      [PARTY_COMMAND_ACTION_NAME],
+      "What to do?",
+      state
+    )
+  end
+
+  def call_ok_handler
+    _neurosdk_call_ok_handler
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([PARTY_COMMAND_ACTION_NAME])
+  end
+end
+
+ACTOR_COMMAND_ACTION_NAME = "choose_actor_action"
+
+class Window_ActorCommand
+  # alias_method :_neurosdk_setup, :setup
+  alias_method :_neurosdk_activate, :activate
+  alias_method :_neurosdk_call_ok_handler, :call_ok_handler
+
+  # def setup(actor)
+  def activate
+    # _neurosdk_setup(actor)
+    result = _neurosdk_activate
+    return unless NeuroSDK.connected?
+    return if NeuroSDK.forced?  # Prevent from firing twice
+    return if @actor.nil?  # Prevent firing before @actor is set
+
+    # TODO: Let Neuro control specific characters
+
+    choice_action = NeuroAction.make_command_window_action(
+      ACTOR_COMMAND_ACTION_NAME,
+      "Choose an action for #{@actor.name}.",
+      self
+    )
+    NeuroSDK.register_actions([choice_action])
+
+    NeuroSDK.force_actions(
+      [ACTOR_COMMAND_ACTION_NAME],
+      "What should #{@actor.name} do?"
+    )
+
+    return result
+  end
+
+  def call_ok_handler
+    _neurosdk_call_ok_handler
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([PARTY_COMMAND_ACTION_NAME])
+  end
+end
+
+# TODO: Window_BattleStatus
+# TODO: Window_BattleActor
+
+BATTLE_ENEMY_ACTION_NAME = "choose_target"
+
+class Window_BattleEnemy
+  alias_method :_neurosdk_show, :show
+  alias_method :_neurosdk_call_ok_handler, :call_ok_handler
+
+  def show
+    result = _neurosdk_show
+    return result unless NeuroSDK.connected?
+
+    choice_action = NeuroAction.make_selectable_window_action(
+      BATTLE_ENEMY_ACTION_NAME,
+      "Choose the target of the action.",
+      self,
+      $game_troop.alive_members.map(&:name)
+    )
+    NeuroSDK.register_actions([choice_action])
+
+    # TODO: Query should depend on the actor and chosen action:
+    #       "Who should <Neuro-sama|Evil Neuro|...> <attack|use the skill on|...>?"
+    NeuroSDK.force_actions(
+      [BATTLE_ENEMY_ACTION_NAME],
+      "Choose the target of the action."
+    )
+
+    return result
+  end
+
+  def call_ok_handler
+    _neurosdk_call_ok_handler
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([PARTY_COMMAND_ACTION_NAME])
+  end
+end
+
+BATTLE_SKILL_ACTION_NAME = "choose_skill"
+
+def format_skill(skill)
+  line = "- #{skill.name} ("
+  if skill.mp_cost > 0 || skill.tp_cost > 0
+    line << "Costs "
+    line << "#{skill.mp_cost} MP" if skill.mp_cost > 0
+    line << ", " if skill.mp_cost > 0 && skill.tp_cost > 0
+    line << "#{skill.tp_cost} TP" if skill.tp_cost > 0
+  else
+    line << "No cost"
+  end
+  line << "): "
+  line << skill.description
+end
+
+class Window_BattleSkill
+  alias_method :_neurosdk_show, :show
+  alias_method :_neurosdk_call_ok_handler, :call_ok_handler
+
+  def show
+    result = _neurosdk_show
+    return result unless NeuroSDK.connected?
+
+    choice_action = NeuroAction.make_selectable_window_action(
+      BATTLE_SKILL_ACTION_NAME,
+      "Choose the skill you want to use.",
+      self,
+      @data.map { |skill| skill.name },
+      (0...@data.size).select { |i| !enable?(@data[i]) }
+    )
+    NeuroSDK.register_actions([choice_action])
+
+    valid_skills, invalid_skills = @data.partition { |skill| enable?(skill) }
+
+    state = ""
+
+    unless valid_skills.empty?
+      state << "You can use the following skills:\n\n"
+      state << valid_skills
+        .map { |skill| format_skill(skill) }
+        .join("\n")
+    end
+
+    state << "\n\n"
+
+    unless invalid_skills.empty?
+      state << "You cannot use the following skills due to unmet requirements:\n\n"
+      state << invalid_skills
+        .map { |skill| format_skill(skill) }
+        .join("\n")
+    end
+
+    state.chomp!
+
+    NeuroSDK.force_actions(
+      [BATTLE_SKILL_ACTION_NAME],
+      "Which skill do you want to use?",
+      state
+    )
+
+    return result
+  end
+
+  def call_ok_handler
+    _neurosdk_call_ok_handler
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([BATTLE_SKILL_ACTION_NAME])
+  end
+end
+
+BATTLE_ITEM_ACTION_NAME = "choose_item"
+
+class Window_BattleItem
+  alias_method :_neurosdk_show, :show
+  alias_method :_neurosdk_call_ok_handler, :call_ok_handler
+
+  def show
+    result = _neurosdk_show
+    return result unless NeuroSDK.connected?
+
+    choice_action = NeuroAction.make_selectable_window_action(
+      BATTLE_ITEM_ACTION_NAME,
+      "Choose the item you want to use.",
+      self,
+      @data.map { |item| item.name },
+      (0...@data.size).select { |i| !enable?(@data[i]) }
+    )
+    NeuroSDK.register_actions([choice_action])
+
+    NeuroSDK.force_actions(
+      [BATTLE_ITEM_ACTION_NAME],
+      "Which item do you want to use?"
+    )
+
+    return result
+  end
+
+  def call_ok_handler
+    _neurosdk_call_ok_handler
+    return unless NeuroSDK.connected?
+
+    NeuroSDK.unregister_actions([BATTLE_ITEM_ACTION_NAME])
+  end
+end
+
+# TODO: Window_TitleCommand
+# TODO: Window_GameEnd

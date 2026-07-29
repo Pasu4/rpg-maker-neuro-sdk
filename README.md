@@ -33,3 +33,51 @@ I got this code from [a WordPress article](https://lthzelda.wordpress.com/2010/0
 
 The SDK runs in a loop, constantly checking if there are new messages on the socket.
 Since the buffer is continuous, messages are delimited by newline characters.
+
+## Integration status
+
+I didn't check what all of these do, some may be removed from this list if they're just base classes.
+
+- [ ] Window_HorzCommand
+- [ ] Window_Help
+- [ ] Window_Gold
+- [ ] Window_MenuCommand
+- [ ] Window_MenuStatus
+- [ ] Window_MenuActor
+- [ ] Window_ItemCategory
+- [ ] Window_ItemList
+- [ ] Window_SkillCommand
+- [ ] Window_SkillStatus
+- [ ] Window_SkillList
+- [ ] Window_EquipStatus
+- [ ] Window_EquipCommand
+- [ ] Window_EquipSlot
+- [ ] Window_EquipItem
+- [ ] Window_Status
+- [ ] Window_SaveFile
+- [ ] Window_ShopCommand
+- [ ] Window_ShopBuy
+- [ ] Window_ShopSell
+- [ ] Window_ShopNumber
+- [ ] Window_ShopStatus
+- [ ] Window_NameEdit
+- [ ] Window_NameInput
+- [x] Window_ChoiceList
+- [ ] Window_NumberInput
+- [ ] Window_KeyItem
+- [ ] Window_Message
+    - [x] Get basic text
+    - [ ] Fix escape sequences
+    - [ ] Character name
+- [ ] Window_ScrollText
+- [ ] Window_MapName
+- [x] Window_BattleLog
+- [x] Window_PartyCommand
+- [x] Window_ActorCommand
+- [x] Window_BattleStatus
+- [x] Window_BattleActor
+- [x] Window_BattleEnemy
+- [x] Window_BattleSkill
+- [x] Window_BattleItem
+- [ ] Window_TitleCommand
+- [ ] Window_GameEnd
