@@ -37,9 +37,12 @@ const server = net.createServer((gameSocket) => {
             console.error('Error: Data was not of type string!');
             return;
         }
-        // Reparse data just to be safe
-        // TODO: Buffer data?
-        apiSocket.send(JSON.stringify(JSON.parse(data)));
+        for (const datum of data.split('\n')) {
+            if (datum.length === 0) continue;
+            // Reparse data just to be safe
+            // TODO: Buffer data?
+            apiSocket.send(JSON.stringify(JSON.parse(datum)));
+        }
     });
     gameSocket.on('close', () => {
         console.log('Client disconnected.');
