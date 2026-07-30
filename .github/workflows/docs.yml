@@ -1,0 +1,38 @@
+name: docs
+run-name: Generate YARD Documentation
+on:
+  push:
+    paths:
+      - Scripts/**
+      - .yardopts
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '4.0'
+      - name: Install YARD
+        run: gem install yard
+      - name: Generate documentation
+        run: yard doc
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: doc/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: generate-docs
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
