@@ -1,11 +1,11 @@
-# RPG Maker VX Ace Neuro Integration
+# RPG Maker VX Ace Neuro SDK
 
-Neuro integration for RPG Maker VX Ace.
-Very WIP.
+Neuro SDK for [RPG Maker VX Ace](https://www.rpgmakerweb.com/products/rpg-maker-vx-ace).
+All the main features of the API are implemented, however I'm still working on a general integration for basic RPGs.
 
 ## How to use
 
-The integration comes in two parts: Ruby scripts for RPG Maker and a proxy server that allows it to talk to the Neuro API.
+The SDK comes in two parts: Ruby scripts for RPG Maker and a proxy server that allows it to talk to the Neuro API.
 
 To install the scripts into your game, open the script editor (F11), create scripts below `( Insert here )` and paste the content of the Ruby files there.
 The order should be `RubyLibraryCode.rb`, `JSON.rb`, `NeuroSDK.rb`.
