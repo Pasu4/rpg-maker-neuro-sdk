@@ -5,6 +5,7 @@ on:
     paths:
       - Scripts/**
       - .yardopts
+      - .github/workflows/docs.yml
 
 jobs:
   generate-docs:
