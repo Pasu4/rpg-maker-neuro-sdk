@@ -20,7 +20,7 @@ jobs:
         with:
           ruby-version: '4.0'
       - name: Install YARD
-        run: gem install yard
+        run: gem install yard yard-link_stdlib
       - name: Generate documentation
         run: yard doc
       - uses: actions/upload-pages-artifact@v4

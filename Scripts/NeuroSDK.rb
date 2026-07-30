@@ -29,6 +29,7 @@ CAN_PARTY_COMMAND = true
 #                           END OF CONFIGURATION                              #
 ###############################################################################
 
+# Helper class for building JSON schemas for use in {NeuroAction NeuroActions}.
 class SchemaBuilder
   class << self
     # Shorthand for `SchemaBuilder.new.types([:string])`.
@@ -238,9 +239,9 @@ class NeuroAction
   #   get to read.
   # @param schema [SchemaBuilder] The schema builder to build the schema on
   #   registration.
-  # @param callback [Proc] `((Hash, nil)) -> NeuroActionResult` callback that
+  # @param callback [Proc<NeuroActionResult>(Hash, nil)] Callback that
   #   is called when the action is executed. **DO NOT** use any blocking calls
-  #   or `Fiber.yield` in this callback (use `NeuroSDK.async` for that).
+  #   or {Fiber.yield} in this callback (use {NeuroSDK.async} for that).
   def initialize(name, description, schema = nil, callback = lambda { |_| NeuroActionResult.new true })
     @name = name
     @description = description
@@ -335,7 +336,7 @@ class NeuroAction
   end
 end
 
-# The result of a `NeuroAction`, sent back to the Neuro API.
+# The result of a {NeuroAction}, sent back to the Neuro API.
 class NeuroActionResult
   attr_reader :success
 
