@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Generate Documentation",
+            "type": "shell",
+            "command": "yard doc",
+            "problemMatcher": [
+                {
+                    "pattern": [
+                        {
+                            "regexp": "\\[(.+?)\\]: (.+)",
+                            "severity": 1,
+                            "message": 2
+                        },
+                        {
+                            "regexp": "in file `(.+?)' near line (\\d+)",
+                            "file": 1,
+                            "line": 2
+                        }
+                    ],
+                    "owner": "yard",
+                    "fileLocation": [
+                        "relative",
+                        "${workspaceFolder}"
+                    ]
+                }
+            ]
+        }
+    ]
+}

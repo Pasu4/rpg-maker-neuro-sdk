@@ -130,6 +130,10 @@
 /Game.rvproj2
 .rgss-script-editor
 
+# YARD
+/doc
+.yardoc
+
 # Other random files
 /test.rb
 /proxy-server.exe
