@@ -64,7 +64,7 @@ module JSON
       end
     end
 
-    # Converts an object to a hash.
+    # Convert an object to a hash.
     # @param obj [Object] The object to convert.
     # @return [Hash] The hash.
     def obj_to_hash(obj)

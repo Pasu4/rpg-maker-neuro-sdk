@@ -98,13 +98,15 @@ class SchemaBuilder
     self
   end
 
-  # @param items [Array<:string, :boolean, :integer, :number>]
+  # Set the schema for array items.
+  # @param items [SchemaBuilder] The schema to apply to every item.
   # @return [SchemaBuilder] Itself for chaining.
   def items(items)
     @items = items
     self
   end
 
+  # Set schemas for properties of the described object.
   # @param properties [Hash<String, SchemaBuilder>] A hash mapping property
   #   names to sub-schemas.
   # @return [SchemaBuilder] Itself for chaining.
@@ -113,6 +115,7 @@ class SchemaBuilder
     self
   end
 
+  # Specify a list of acceptable values for the property.
   # @param enum [Array] Array of accepted values.
   # @return [SchemaBuilder] Itself for chaining.
   def enum(enum)
@@ -166,6 +169,7 @@ class SchemaBuilder
     self
   end
 
+  # Add a description to the schema.
   # @param description [String] The description of the schema.
   # @return [SchemaBuilder] Itself for chaining.
   def description(description)
@@ -173,7 +177,7 @@ class SchemaBuilder
     self
   end
 
-  # Add additional data to the schema.
+  # Add additional arbitrary data to the schema.
   # @param meta [Hash] A hash containing the additional data.
   # @return [SchemaBuilder] Itself for chaining.
   def meta(meta)
@@ -222,14 +226,14 @@ class SchemaBuilder
   end
 end
 
-# @api private
+# @api hidden
 COMMAND_WINDOW_ACTION_CANCEL = "(cancel)"
 
 # An action that the Neuro API can use to interact with the game.
 class NeuroAction
   # The name of the action.
   attr_reader :name
-  # `((Hash, nil)) -> NeuroActionResult` callback that is called when the action is executed.
+  # *(({Hash}, nil)) -> {NeuroActionResult}* callback that is called when the action is executed.
   attr_accessor :callback
 
   # Create a new action with a name and a description.
@@ -509,6 +513,7 @@ module NeuroSDK
     public
 
     # Frame update (internal use).
+    # @api private
     def update
       @fiber = Fiber.new { main } unless @fiber
       @fiber.resume
@@ -544,7 +549,7 @@ module NeuroSDK
       return true
     end
 
-    # Sends a context message to Neuro.
+    # Send a context message to Neuro.
     # @param context [String] The context to send.
     # @param silent [Boolean] If `true`, will not prompt Neuro to respond.
     def send_context(context, silent = false)
@@ -635,7 +640,7 @@ end
 #   Hooks
 #----------------------------------------------------------------------------
 
-# @api private
+# @api hidden
 class Scene_Base
   alias_method :_neurosdk_update, :update
 
@@ -645,7 +650,7 @@ class Scene_Base
   end
 end
 
-# @api private
+# @api hidden
 class Window_Message
   alias_method :_neurosdk_process_all_text, :process_all_text
 
@@ -656,10 +661,10 @@ class Window_Message
   end
 end
 
-# @api private
+# @api hidden
 DIALOGUE_CHOICE_ACTION_NAME = "choose_dialogue_option"
 
-# @api private
+# @api hidden
 class Window_ChoiceList
   alias_method :_neurosdk_start, :start
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -736,7 +741,7 @@ end
 # TODO: Window_ScrollText
 # TODO: Window_MapName
 
-# @api private
+# @api hidden
 class Window_BattleLog
   alias_method :_neurosdk_add_text, :add_text
   alias_method :_neurosdk_replace_text, :replace_text
@@ -760,10 +765,10 @@ class Window_BattleLog
   end
 end
 
-# @api private
+# @api hidden
 PARTY_COMMAND_ACTION_NAME = "choose_party_action"
 
-# @api private
+# @api hidden
 class Window_PartyCommand
   alias_method :_neurosdk_setup, :setup
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -816,10 +821,10 @@ class Window_PartyCommand
   end
 end
 
-# @api private
+# @api hidden
 ACTOR_COMMAND_ACTION_NAME = "choose_actor_action"
 
-# @api private
+# @api hidden
 class Window_ActorCommand
   # alias_method :_neurosdk_setup, :setup
   alias_method :_neurosdk_activate, :activate
@@ -861,10 +866,10 @@ end
 # TODO: Window_BattleStatus
 # TODO: Window_BattleActor
 
-# @api private
+# @api hidden
 BATTLE_ENEMY_ACTION_NAME = "choose_target"
 
-# @api private
+# @api hidden
 class Window_BattleEnemy
   alias_method :_neurosdk_show, :show
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -899,10 +904,10 @@ class Window_BattleEnemy
   end
 end
 
-# @api private
+# @api hidden
 BATTLE_SKILL_ACTION_NAME = "choose_skill"
 
-# @api private
+# @api hidden
 def format_skill(skill)
   line = "- #{skill.name} ("
   if skill.mp_cost > 0 || skill.tp_cost > 0
@@ -917,7 +922,7 @@ def format_skill(skill)
   line << skill.description.gsub("\n", " ")
 end
 
-# @api private
+# @api hidden
 class Window_BattleSkill
   alias_method :_neurosdk_activate, :activate
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -975,10 +980,10 @@ class Window_BattleSkill
   end
 end
 
-# @api private
+# @api hidden
 BATTLE_ITEM_ACTION_NAME = "choose_item"
 
-# @api private
+# @api hidden
 class Window_BattleItem
   alias_method :_neurosdk_activate, :activate
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler

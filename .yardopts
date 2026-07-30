@@ -1,1 +1,1 @@
---hide-api private --plugin yard-link_stdlib Scripts/NeuroSDK.rb Scripts/JSON.rb
+--hide-api hidden --default-return void --plugin yard-link_stdlib Scripts/NeuroSDK.rb Scripts/JSON.rb
