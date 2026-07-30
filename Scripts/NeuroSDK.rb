@@ -97,7 +97,7 @@ class SchemaBuilder
     self
   end
 
-  # @param types [Array<:string, :boolean, :integer, :number>]
+  # @param items [Array<:string, :boolean, :integer, :number>]
   # @return [SchemaBuilder] Itself for chaining.
   def items(items)
     @items = items
@@ -221,8 +221,10 @@ class SchemaBuilder
   end
 end
 
+# @api private
 COMMAND_WINDOW_ACTION_CANCEL = "(cancel)"
 
+# An action that the Neuro API can use to interact with the game.
 class NeuroAction
   # The name of the action.
   attr_reader :name
@@ -333,6 +335,7 @@ class NeuroAction
   end
 end
 
+# The result of a `NeuroAction`, sent back to the Neuro API.
 class NeuroActionResult
   attr_reader :success
 
@@ -604,23 +607,22 @@ module NeuroSDK
 
     # Execute an action asynchronously.
     #
-    # Example:
+    # @example
+    #     NeuroAction.new(
+    #       "do_something",
+    #       "Do something",
+    #       nil,
+    #       lambda {
+    #         NeuroSDK.async {
+    #           60.times { Fiber.yield }  # Wait 1 second
     #
-    #   NeuroAction.new(
-    #     "do_something",
-    #     "Do something",
-    #     nil,
-    #     lambda {
-    #       NeuroSDK.async {
-    #         60.times { Fiber.yield }  # Wait 1 second
-    #
-    #         # (Do something)
+    #           # (Do something)
+    #         }
+    #         return NeuroActionResult.new true
     #       }
-    #       return NeuroActionResult.new true
-    #     }
-    #   )
+    #     )
     #
-    # @param &proc [Proc] Code to execute.
+    # @param proc [Proc] Code to execute.
     def async(&proc)
       @async_fibers.push (Fiber.new { proc.call })
       nil
@@ -632,6 +634,7 @@ end
 #   Hooks
 #----------------------------------------------------------------------------
 
+# @api private
 class Scene_Base
   alias_method :_neurosdk_update, :update
 
@@ -641,6 +644,7 @@ class Scene_Base
   end
 end
 
+# @api private
 class Window_Message
   alias_method :_neurosdk_process_all_text, :process_all_text
 
@@ -651,8 +655,10 @@ class Window_Message
   end
 end
 
+# @api private
 DIALOGUE_CHOICE_ACTION_NAME = "choose_dialogue_option"
 
+# @api private
 class Window_ChoiceList
   alias_method :_neurosdk_start, :start
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -729,6 +735,7 @@ end
 # TODO: Window_ScrollText
 # TODO: Window_MapName
 
+# @api private
 class Window_BattleLog
   alias_method :_neurosdk_add_text, :add_text
   alias_method :_neurosdk_replace_text, :replace_text
@@ -752,8 +759,10 @@ class Window_BattleLog
   end
 end
 
+# @api private
 PARTY_COMMAND_ACTION_NAME = "choose_party_action"
 
+# @api private
 class Window_PartyCommand
   alias_method :_neurosdk_setup, :setup
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -766,7 +775,8 @@ class Window_PartyCommand
     choice_action = NeuroAction.make_command_window_action(
       PARTY_COMMAND_ACTION_NAME,
       "Choose an action for the party.",
-      self
+      self,
+      [1]  # DEBUG: Disable escape
     )
     NeuroSDK.register_actions([choice_action])
 
@@ -805,8 +815,10 @@ class Window_PartyCommand
   end
 end
 
+# @api private
 ACTOR_COMMAND_ACTION_NAME = "choose_actor_action"
 
+# @api private
 class Window_ActorCommand
   # alias_method :_neurosdk_setup, :setup
   alias_method :_neurosdk_activate, :activate
@@ -848,8 +860,10 @@ end
 # TODO: Window_BattleStatus
 # TODO: Window_BattleActor
 
+# @api private
 BATTLE_ENEMY_ACTION_NAME = "choose_target"
 
+# @api private
 class Window_BattleEnemy
   alias_method :_neurosdk_show, :show
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -884,8 +898,10 @@ class Window_BattleEnemy
   end
 end
 
+# @api private
 BATTLE_SKILL_ACTION_NAME = "choose_skill"
 
+# @api private
 def format_skill(skill)
   line = "- #{skill.name} ("
   if skill.mp_cost > 0 || skill.tp_cost > 0
@@ -900,6 +916,7 @@ def format_skill(skill)
   line << skill.description.gsub("\n", " ")
 end
 
+# @api private
 class Window_BattleSkill
   alias_method :_neurosdk_activate, :activate
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler
@@ -957,8 +974,10 @@ class Window_BattleSkill
   end
 end
 
+# @api private
 BATTLE_ITEM_ACTION_NAME = "choose_item"
 
+# @api private
 class Window_BattleItem
   alias_method :_neurosdk_activate, :activate
   alias_method :_neurosdk_call_ok_handler, :call_ok_handler

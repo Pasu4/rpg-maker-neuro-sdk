@@ -7,6 +7,7 @@
 class JSONParseError < Exception
 end
 
+# Provides methods for converting hashes from and to JSON.
 module JSON
   # The string that is currently being parsed.
   # @type [String]
@@ -34,7 +35,6 @@ module JSON
     #
     # Based on https://www.json.org/json-en.html.
     # @param string [String] The JSON string to parse.
-    # @param start [Integer] The in the string index to start at.
     # @return [Hash, Array, Integer, Boolean, Float, nil]
     #   The object parsed from the JSON string.
     def parse(string)
