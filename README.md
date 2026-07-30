@@ -9,11 +9,66 @@ The integration comes in two parts: Ruby scripts for RPG Maker and a proxy serve
 
 To install the scripts into your game, open the script editor (F11), create scripts below `( Insert here )` and paste the content of the Ruby files there.
 The order should be `RubyLibraryCode.rb`, `JSON.rb`, `NeuroSDK.rb`.
-To connect to the Neuro API, add a script command containing `NeuroSDK.connect` to an event.
+To connect to the Neuro API, add a script command containing `NeuroSDK.connect` to an event (currently does not work from the root fiber).
 Note that the proxy server must be started at this point, otherwise the connection will fail.
 
+<details><summary>Example</summary>
+
+```ruby
+# Activate the Neuro SDK
+# Currently does not work from the root fiber
+unless NeuroSDK.connect
+  msgbox("Error: Could not connect to Neuro API.")
+end
+
+# Create an action
+display_message_action = NeuroAction.new(
+  "display_message",  # Action name
+  "Display a message after some time.",  # Action description
+  SchemaBuilder.object({  # Action schema
+    text: SchemaBuilder.string
+      .meta({ maxLength: 30 }),
+    after: SchemaBuilder.integer
+      .description("The time in frames (1/60 s) to wait before displaying the message.")
+      .optional
+      .min(0).max(300)
+      .meta({ default: 0 })
+  }),
+  # Callback called when Neuro executes the action
+  lambda { |data|
+    text = data["text"]
+    frames = data["after"]
+
+    # There is no schema validation at the moment, so always check the types/constraints before use
+    return NeuroActionResult.new(false, "'text' must be a string.") if text.nil? || !text.is_a?(String)
+    return NeuroActionResult.new(false, "'text' must be at most 30 characters long.") if text.size > 30
+    frames = 0 if frames.nil?
+    return NeuroActionResult.new(false, "'after' must be an integer.") unless frames.is_a?(Integer)
+    return NeuroActionResult.new(false, "'after' must be between 0 and 300") if frames < 0 || frames > 300
+
+    # If you want to wait (i.e. yield), always use NeuroSDK.async
+    NeuroSDK.async {
+      frames.times { Fiber.yield }  # Wait for the specified amount of frames
+      $game_message.add(text)  # Display the text
+    }
+    return NeuroActionResult.new true
+  }
+)
+
+# Register the action
+NeuroSDK.register_actions([display_message_action])
+
+# Force the action
+NeuroSDK.force_actions(
+  [display_message_action.name],
+  "You should send a message."
+)
+```
+
+</details>
+
 For the proxy server, run the JavaScript file using `node proxy-server.js`.
-I'll build and release this as a standalone executable at some point.
+You can also build it to a standalone executable using `node --build-sea sea-config.json` (requires node >= v19.7.0 I believe).
 
 All the main functionality of the API specification is implemented.
 Additionally, Neuro will get context from dialogue boxes and can choose dialogue options.
@@ -22,7 +77,6 @@ The following is also planned in the future:
 - Equipping weapons/armor/etc.
 - Using items from the inventory
 - Buying/selling stuff at shops
-- Fighting battles
 - Walking / pathing to points of interest on the map
 
 ## Technical information
