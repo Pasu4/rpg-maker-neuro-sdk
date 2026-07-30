@@ -182,6 +182,7 @@ class SchemaBuilder
   # @return [SchemaBuilder] Itself for chaining.
   def meta(meta)
     @meta = meta
+    self
   end
 
   # Build the JSON schema.
@@ -531,6 +532,7 @@ module NeuroSDK
     end
 
     # Connect to the Neuro API proxy server.
+    # @return [Boolean] Whether the connection was successful.
     def connect
       init
       if @connected
