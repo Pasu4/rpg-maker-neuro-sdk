@@ -33,32 +33,38 @@ CAN_PARTY_COMMAND = true
 class SchemaBuilder
   class << self
     # Shorthand for `SchemaBuilder.new.types([:string])`.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def string
       SchemaBuilder.new.types([:string])
     end
 
     # Shorthand for `SchemaBuilder.new.types([:boolean])`.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def boolean
       SchemaBuilder.new.types([:boolean])
     end
 
     # Shorthand for `SchemaBuilder.new.types([:integer])`.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def integer
       SchemaBuilder.new.types([:integer])
     end
 
     # Shorthand for `SchemaBuilder.new.types([:number])`.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def number
       SchemaBuilder.new.types([:number])
     end
 
     # Shorthand for `SchemaBuilder.new.types([:null])`.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def null
       SchemaBuilder.new.types([:null])
     end
 
     # Shorthand for `SchemaBuilder.new.types([:array]).items(items)`.
     # @param items [SchemaBuilder] Schema for the items of the array.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def array(items)
       SchemaBuilder.new
         .types([:array])
@@ -66,8 +72,9 @@ class SchemaBuilder
     end
 
     # Shorthand for `SchemaBuilder.new.types([:object]).properties(properties)`.
-    # @param properties [Hash<String, SchemaBuilder>] A hash mapping property
-    #   names to sub-schemas.
+    # @param properties [Hash{String, Symbol => SchemaBuilder}] A hash mapping
+    #   property names to sub-schemas.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def object(properties)
       SchemaBuilder.new
         .types([:object])
@@ -76,12 +83,15 @@ class SchemaBuilder
 
     # Shorthand for `SchemaBuilder.new.enum(enum)`.
     # @param enum [Array] Array of accepted values.
+    # @return [SchemaBuilder] The constructed {SchemaBuilder}.
     def enum(enum)
       SchemaBuilder.new
         .enum(enum)
     end
   end
 
+  # Whether this property sub-schema is required in the object schema that
+  # contains it.
   def optional?; @optional end
 
   def initialize
@@ -92,7 +102,7 @@ class SchemaBuilder
   # Set the accepted types for the schema.
   # @param types [Array<:string, :boolean, :integer, :number, :array, :object>]
   #   The accepted types for the schema.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def types(types)
     @types = types
     self
@@ -100,16 +110,16 @@ class SchemaBuilder
 
   # Set the schema for array items.
   # @param items [SchemaBuilder] The schema to apply to every item.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def items(items)
     @items = items
     self
   end
 
   # Set schemas for properties of the described object.
-  # @param properties [Hash<String, SchemaBuilder>] A hash mapping property
-  #   names to sub-schemas.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @param properties [Hash{String, Symbol => SchemaBuilder}] A hash mapping
+  #   property names to sub-schemas.
+  # @return [self] Itself for chaining.
   def properties(properties)
     @properties = properties
     self
@@ -117,7 +127,7 @@ class SchemaBuilder
 
   # Specify a list of acceptable values for the property.
   # @param enum [Array] Array of accepted values.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def enum(enum)
     @enum = enum
     self
@@ -125,7 +135,7 @@ class SchemaBuilder
 
   # Set the schema as optional. This means that the property may be omitted
   #   from the object.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def optional
     @optional = true
     self
@@ -135,7 +145,7 @@ class SchemaBuilder
   # @param min [Integer, Float] The minimum value.
   # @param exclusive [Boolean] Whether the minimum value itself should be
   #   excluded from the range.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def min(min, exclusive = false)
     @min = min
     @minExclusive = exclusive
@@ -146,7 +156,7 @@ class SchemaBuilder
   # @param max [Integer, Float] The maximum value.
   # @param exclusive [Boolean] Whether the maximum value itself should be
   #   excluded from the range.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def max(max, exclusive = false)
     @max = max
     @maxExclusive = exclusive
@@ -155,7 +165,7 @@ class SchemaBuilder
 
   # Set a minimum number of items for the array.
   # @param min [Integer] The minimum number of items.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def minItems(min)
     @minItems = min
     self
@@ -163,7 +173,7 @@ class SchemaBuilder
 
   # Set a maximum number of items for the array.
   # @param max [Integer] The maximum number of items.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def maxItems(max)
     @maxItems = max
     self
@@ -171,22 +181,22 @@ class SchemaBuilder
 
   # Add a description to the schema.
   # @param description [String] The description of the schema.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @return [self] Itself for chaining.
   def description(description)
     @description = description
     self
   end
 
   # Add additional arbitrary data to the schema.
-  # @param meta [Hash] A hash containing the additional data.
-  # @return [SchemaBuilder] Itself for chaining.
+  # @param meta [Hash{String, Symbol => Object}] A hash containing the additional data.
+  # @return [self] Itself for chaining.
   def meta(meta)
     @meta = meta
     self
   end
 
   # Build the JSON schema.
-  # @return [Hash] The hash representing the schema.
+  # @return [Hash{String => Object}] The hash representing the schema.
   def build
     hash = {}
 
@@ -221,7 +231,11 @@ class SchemaBuilder
 
     hash["maxItems"] = @maxItems unless @maxItems.nil?
 
-    hash.merge!(@meta) unless @meta.nil?
+    unless @meta.nil?
+      @meta.each { |k, v|
+        hash[k.to_s] = v
+      }
+    end
 
     return hash
   end
@@ -232,9 +246,10 @@ COMMAND_WINDOW_ACTION_CANCEL = "(cancel)"
 
 # An action that the Neuro API can use to interact with the game.
 class NeuroAction
-  # The name of the action.
+  # @return [String] The name of the action.
   attr_reader :name
-  # *(({Hash}, nil)) -> {NeuroActionResult}* callback that is called when the action is executed.
+  # @return [(Hash, nil) => NeuroActionResult] Callback that is called
+  #   when the action is executed.
   attr_accessor :callback
 
   # Create a new action with a name and a description.
@@ -244,7 +259,7 @@ class NeuroAction
   #   get to read.
   # @param schema [SchemaBuilder] The schema builder to build the schema on
   #   registration.
-  # @param callback [Proc<NeuroActionResult>(Hash, nil)] Callback that
+  # @param callback [(Hash, nil) => NeuroActionResult] Callback that
   #   is called when the action is executed. **DO NOT** use any blocking calls
   #   or {Fiber.yield} in this callback (use {NeuroSDK.async} for that).
   def initialize(name, description, schema = nil, callback = lambda { |_| NeuroActionResult.new true })
@@ -372,10 +387,12 @@ end
 # Contains methods for communicating with the Neuro API.
 module NeuroSDK
   class << self
+    # Whether the SDK is connected to the API.
     def connected?
       @connected
     end
 
+    # Whether an action force is currently active.
     def forced?
       @forced
     end
@@ -643,7 +660,7 @@ module NeuroSDK
     #       }
     #     )
     #
-    # @param proc [Proc] Code to execute.
+    # @param proc [() => void] Callback to execute.
     def async(&proc)
       @async_fibers.push (Fiber.new { proc.call })
       nil
