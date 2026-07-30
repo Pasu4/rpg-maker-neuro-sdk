@@ -380,6 +380,19 @@ module NeuroSDK
       @forced
     end
 
+    # Session ID from the startup acknowledgement.
+    # If startup acknowledgement has not been received, the value is `nil`.
+    # @return [String, nil]
+    attr_reader :session_id
+    # Character ID from the startup acknowledgement.
+    # If startup acknowledgement has not been received, the value is `nil`.
+    # @return [String, nil]
+    attr_reader :character_id
+    # Display name from the startup acknowledgement.
+    # If startup acknowledgement has not been received, the value is `nil`.
+    # @return [String, nil]
+    attr_reader :display_name
+
     #------------------------------------------------------------------------
     #   Private functions
     #------------------------------------------------------------------------
