@@ -8,11 +8,22 @@ All the main features of the API are implemented, however I'm still working on a
 The SDK comes in two parts: Ruby scripts for RPG Maker and a proxy server that allows it to talk to the Neuro API.
 
 To install the scripts into your game, open the script editor (F11), create scripts below `( Insert here )` and paste the content of the Ruby files there.
-The order should be `RubyLibraryCode.rb`, `JSON.rb`, `NeuroSDK.rb`.
+The functions of the different files you can find in the following list.
+They should be inserted in this exact order.
+
+- `RubyLibraryCode`: Contains methods for working with TCP sockets. Required for the Neuro SDK to work.
+- `JSON`: A JSON parser and stringifier. Required for the Neuro SDK to work.
+- `NeuroSDK`: The core of the Neuro SDK. Contains all of the basic functionality, such as registering actions and sending context. Requires `RubyLibraryCode` and `JSON`.
+- `BasicNeuroIntegration`: Optional. Provides an integration for the default RPG Maker scripts, allowing Neuro to control things such as dialogue choices and battles. If you use other custom scripts (e.g. a different battle system), it may not work without some modification. Requires `NeuroSDK`.
+
+Additionally, `NeuroSDK` and `BasicNeuroIntegration` can be configured by changing the constants in the "CONFIGURATION" section at the start of each file.
+
 To connect to the Neuro API, add a script command containing `NeuroSDK.connect` to an event (currently does not work from the root fiber).
 Note that the proxy server must be started at this point, otherwise the connection will fail.
 
-<details><summary>Example</summary>
+See also the API reference [here](https://pasu4.github.io/rpg-maker-vxa-neuro-sdk/index.html).
+
+<details><summary>Code Example</summary>
 
 ```ruby
 # Activate the Neuro SDK
@@ -87,6 +98,17 @@ I got this code from [a WordPress article](https://lthzelda.wordpress.com/2010/0
 
 The SDK runs in a loop, constantly checking if there are new messages on the socket.
 Since the buffer is continuous, messages are delimited by newline characters.
+
+## Does this work for other versions of RPG Maker?
+
+Probably not, at least without some modifications.
+The `JSON` script should work as-is, `NeuroSDK` may require some modification to the `Scene_Base` overwrite, `RubyLibraryCode` possibly won't work, `BasicNeuroIntegration` definitely won't work.
+
+I got `RubyLibraryCode` from a multiplayer script for RPG Maker XP, but it did not work without some modification either.
+You can refer to [this forum post](https://forum.chaos-project.com/index.php?topic=14121.0) and the article linked above if you want to try your luck.
+
+`BasicNeuroIntegration` hooks into the classes of the default RPG Maker VX Ace scripts.
+Since these change between RPG Maker versions, you'll have to modify them so they overwrite the correct methods.
 
 ## Integration status
 
